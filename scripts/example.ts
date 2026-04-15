@@ -51,7 +51,8 @@ async function run(signal: AbortSignal): Promise<void> {
 		throw new Error('--input is required');
 	}
 
-	const log = logger.child({ script: 'example' });
+	const childContext = { script: 'example' };
+	const log = logger.child(childContext);
 	const modelId = values.model ?? 'google/gemini-3-flash-preview';
 
 	const startContext = {
@@ -73,7 +74,7 @@ async function run(signal: AbortSignal): Promise<void> {
 		system,
 		messages,
 		providerOptions: providerOptions.reasoningOff,
-		signal,
+		abortSignal: signal,
 	};
 
 	const result = await structured(summarySchema, structuredOptions);

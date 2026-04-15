@@ -16,7 +16,10 @@ export class NotFoundError extends AppError {
 }
 
 export class ValidationError extends AppError {
-	constructor(message: string) {
+	constructor(
+		message: string,
+		public readonly field?: string
+	) {
 		super(message, 'VALIDATION_ERROR', 400);
 	}
 }

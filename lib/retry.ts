@@ -9,12 +9,12 @@ export type RetryOptions = {
 };
 
 // retries fn with exponential backoff and full jitter.
-export async function retry<T>(fn: () => Promise<T>, options?: RetryOptions): Promise<T> {
-	const maxAttempts = options?.maxAttempts ?? 3;
-	const baseDelay = options?.baseDelay ?? 1000;
-	const maxDelay = options?.maxDelay ?? 10_000;
-	const multiplier = options?.multiplier ?? 2;
-	const signal = options?.signal;
+export async function retry<T>(fn: () => Promise<T>, options: RetryOptions = {}): Promise<T> {
+	const maxAttempts = options.maxAttempts ?? 3;
+	const baseDelay = options.baseDelay ?? 1000;
+	const maxDelay = options.maxDelay ?? 10_000;
+	const multiplier = options.multiplier ?? 2;
+	const signal = options.signal;
 
 	let lastError: unknown;
 

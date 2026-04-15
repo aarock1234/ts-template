@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { toJSONSchema } from 'zod';
 import type { z } from 'zod';
+import { toJSONSchema } from 'zod/v4/core';
 
 const PROMPTS_DIR = join(import.meta.dirname, '../../prompts');
 const DIRECTIVE_PATTERN = /\{\{([A-Z][A-Z0-9_]*)\}\}/g;

@@ -10,10 +10,10 @@ export type ConcurrencyOptions = {
 export async function mapConcurrent<T, R>(
 	items: T[],
 	fn: (item: T) => Promise<R>,
-	options?: ConcurrencyOptions
+	options: ConcurrencyOptions = {}
 ): Promise<R[]> {
-	const concurrency = options?.concurrency ?? 10;
-	const signal = options?.signal;
+	const concurrency = options.concurrency ?? 10;
+	const signal = options.signal;
 	const limit = pLimit(concurrency);
 
 	return Promise.all(
@@ -32,10 +32,10 @@ export async function mapConcurrent<T, R>(
 export async function mapConcurrentSettled<T, R>(
 	items: T[],
 	fn: (item: T) => Promise<R>,
-	options?: ConcurrencyOptions
+	options: ConcurrencyOptions = {}
 ): Promise<PromiseSettledResult<R>[]> {
-	const concurrency = options?.concurrency ?? 10;
-	const signal = options?.signal;
+	const concurrency = options.concurrency ?? 10;
+	const signal = options.signal;
 	const limit = pLimit(concurrency);
 
 	return Promise.all(

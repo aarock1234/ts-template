@@ -1,16 +1,15 @@
 import pino from 'pino';
 
-import { env } from '@/lib/config/env';
-import { NodeEnv } from '@/lib/config/env';
+import { env, NodeEnv } from '@/lib/config/env';
+
+const prettyTransport = {
+	target: 'pino-pretty',
+	options: { translateTime: 'SYS:standard' },
+};
 
 export const logger = pino({
 	level: env.LOG_LEVEL,
-	...(env.NODE_ENV === NodeEnv.Development && {
-		transport: {
-			target: 'pino-pretty',
-			options: {
-				translateTime: 'SYS:standard',
-			},
-		},
+	...(env.NODE_ENV === NodeEnv.DEVELOPMENT && {
+		transport: prettyTransport,
 	}),
 });
