@@ -1,28 +1,38 @@
-import { type LanguageModel, type ModelMessage, generateText, Output } from 'ai';
+import { generateText, Output } from 'ai';
+import type { CallSettings, LanguageModel, Prompt } from 'ai';
 import type { ProviderOptions } from '@ai-sdk/provider-utils';
 import type { z } from 'zod';
 
 import { retry } from '@/lib/retry';
 
-type StructuredOptions = {
-	model: LanguageModel;
-	system?: string;
-	providerOptions?: ProviderOptions;
-	retries?: number;
-	signal?: AbortSignal;
-} & ({ prompt: string; messages?: never } | { messages: ModelMessage[]; prompt?: never });
+type StructuredOptions = CallSettings &
+	Prompt & {
+		model: LanguageModel;
+		providerOptions?: ProviderOptions;
+		retries?: number;
+	};
 
 // generates structured output from an LLM using a Zod schema.
 // wraps generateText + Output.object with retry, null-output handling,
-// and Zod re-validation to avoid type assertions.
+// and Zod re-validation for type safety.
 export async function structured<T extends z.ZodType>(schema: T, options: StructuredOptions): Promise<z.infer<T>> {
-	const { retries = 2, signal, ...rest } = options;
-	const retryOptions = { maxAttempts: retries + 1, signal };
-	const outputConfig = { schema };
+	const { retries = 2, ...generateParams } = options;
+
+	const retryOptions = {
+		maxAttempts: retries + 1,
+		signal: generateParams.abortSignal,
+	};
+
+	const outputConfig = {
+		schema,
+		name: schema.meta()?.title,
+		description: schema.meta()?.description,
+	};
+
 	const output = Output.object(outputConfig);
 
 	return retry(async () => {
-		const generateOptions = { ...rest, output };
+		const generateOptions = { ...generateParams, output };
 		const result = await generateText(generateOptions);
 
 		if (!result.output) {

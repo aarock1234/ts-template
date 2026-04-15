@@ -1,9 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { toJSONSchema, type z } from 'zod';
+import { toJSONSchema } from 'zod';
+import type { z } from 'zod';
 
-const PROMPTS_DIR = join(process.cwd(), 'prompts');
+const PROMPTS_DIR = join(import.meta.dirname, '../../prompts');
 const DIRECTIVE_PATTERN = /\{\{([A-Z][A-Z0-9_]*)\}\}/g;
 
 type PromptVars = Record<string, string>;
@@ -22,6 +23,7 @@ export function loadPrompt(name: string, vars: PromptVars = {}): string {
 		}
 
 		usedVars.add(key);
+
 		return vars[key];
 	});
 
@@ -39,5 +41,5 @@ export function schemaBlock(schema: z.ZodType): string {
 	const jsonSchema = toJSONSchema(schema);
 	const formatted = JSON.stringify(jsonSchema, null, 2);
 
-	return ['```json', formatted, '```'].join('\n');
+	return `\`\`\`json\n${formatted}\n\`\`\``;
 }
