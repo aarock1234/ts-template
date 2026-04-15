@@ -2,7 +2,7 @@ import { setTimeout } from 'node:timers/promises';
 
 export type RetryOptions = {
 	maxAttempts?: number;
-	initialDelay?: number;
+	baseDelay?: number;
 	maxDelay?: number;
 	multiplier?: number;
 	signal?: AbortSignal;
@@ -11,7 +11,7 @@ export type RetryOptions = {
 // retries fn with exponential backoff and full jitter.
 export async function retry<T>(fn: () => Promise<T>, options?: RetryOptions): Promise<T> {
 	const maxAttempts = options?.maxAttempts ?? 3;
-	const initialDelay = options?.initialDelay ?? 1000;
+	const baseDelay = options?.baseDelay ?? 1000;
 	const maxDelay = options?.maxDelay ?? 10_000;
 	const multiplier = options?.multiplier ?? 2;
 	const signal = options?.signal;
@@ -23,14 +23,15 @@ export async function retry<T>(fn: () => Promise<T>, options?: RetryOptions): Pr
 			return await fn();
 		} catch (error) {
 			lastError = error;
+		}
 
-			if (attempt === maxAttempts - 1) break;
-
-			// full jitter: sleep = random(0, min(initialDelay * multiplier^attempt, maxDelay))
-			const ceiling = Math.min(initialDelay * multiplier ** attempt, maxDelay);
+		// don't sleep after the final attempt
+		if (attempt + 1 < maxAttempts) {
+			const ceiling = Math.min(baseDelay * multiplier ** attempt, maxDelay);
 			const delay = Math.random() * ceiling;
+			const timerOptions = { signal };
 
-			await setTimeout(delay, undefined, { signal });
+			await setTimeout(delay, undefined, timerOptions);
 		}
 	}
 

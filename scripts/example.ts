@@ -6,11 +6,10 @@ import { parseArgs } from 'node:util';
 import type { ModelMessage } from 'ai';
 import { z } from 'zod';
 
-import { createModel, reasoning } from '@/lib/ai/client';
-import { structured } from '@/lib/ai/structured';
+import { openrouter, providerOptions } from '@/lib/ai/provider';
 import { loadPrompt, schemaBlock } from '@/lib/ai/prompts';
-import { loadConfig } from '@/lib/config';
-import { createLogger } from '@/lib/logger';
+import { structured } from '@/lib/ai/structured';
+import { logger } from '@/lib/log';
 
 const parseOptions = {
 	options: {
@@ -46,38 +45,41 @@ const summarySchema = z
 	});
 
 async function run(signal: AbortSignal): Promise<void> {
-	const config = loadConfig();
-	const log = createLogger('example', config.LOG_LEVEL);
 	const { values } = parseArgs(parseOptions);
-	const input = values.input;
-	const modelId = typeof values.model === 'string' ? values.model : 'google/gemini-3-flash-preview';
 
-	if (typeof input !== 'string' || input.length === 0) {
+	if (!values.input) {
 		throw new Error('--input is required');
 	}
 
-	const startContext = { input, model: modelId };
-	log.info('starting', startContext);
+	const log = logger.child({ script: 'example' });
+	const modelId = values.model ?? 'google/gemini-3-flash-preview';
+
+	const startContext = {
+		input: values.input,
+		model: modelId,
+	};
+	log.info(startContext, 'starting');
+
 	const promptVars = { RESPONSE_SCHEMA: schemaBlock(summarySchema) };
 	const system = loadPrompt('example', promptVars);
 	const messages: ModelMessage[] = [
 		{
 			role: 'user',
-			content: input,
+			content: values.input,
 		},
 	];
 	const structuredOptions = {
-		model: createModel(modelId),
+		model: openrouter(modelId),
 		system,
 		messages,
-		providerOptions: reasoning.off,
+		providerOptions: providerOptions.reasoningOff,
 		signal,
 	};
 
 	const result = await structured(summarySchema, structuredOptions);
 	const resultContext = { result };
 
-	log.info('done', resultContext);
+	log.info(resultContext, 'done');
 	console.log(JSON.stringify(result, null, 2));
 }
 
@@ -87,6 +89,7 @@ process.on('SIGINT', () => controller.abort());
 process.on('SIGTERM', () => controller.abort());
 
 run(controller.signal).catch((error: unknown) => {
-	console.error(error);
+	const context = { err: error };
+	logger.error(context, 'script failed');
 	process.exit(1);
 });

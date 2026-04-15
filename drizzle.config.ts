@@ -1,17 +1,12 @@
 import { defineConfig } from 'drizzle-kit';
 
-import { loadConfig } from './lib/config';
+import { env } from './lib/config/env';
 
-const config = loadConfig();
-const dbCredentials = {
-	url: config.DATABASE_URL,
-};
+const dbCredentials = { url: env.DATABASE_URL };
 
-const drizzleConfig = defineConfig({
+export default defineConfig({
 	schema: './lib/db/schema.ts',
 	out: './lib/db/migrations',
 	dialect: 'postgresql',
 	dbCredentials,
 });
-
-export default drizzleConfig;
