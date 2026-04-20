@@ -11,6 +11,8 @@ import { loadPrompt, schemaBlock } from '@/lib/ai/prompts';
 import { structured } from '@/lib/ai/structured';
 import { logger } from '@/lib/log';
 
+const DEFAULT_MODEL = 'google/gemini-3-flash-preview';
+
 const parseOptions = {
 	options: {
 		input: {
@@ -20,7 +22,7 @@ const parseOptions = {
 		model: {
 			type: 'string',
 			short: 'm',
-			default: 'google/gemini-3-flash-preview',
+			default: DEFAULT_MODEL,
 		},
 	},
 	strict: true,
@@ -53,7 +55,7 @@ async function run(signal: AbortSignal): Promise<void> {
 
 	const childContext = { script: 'example' };
 	const log = logger.child(childContext);
-	const modelId = values.model ?? 'google/gemini-3-flash-preview';
+	const modelId = values.model ?? DEFAULT_MODEL;
 
 	const startContext = {
 		input: values.input,

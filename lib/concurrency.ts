@@ -5,52 +5,56 @@ export type ConcurrencyOptions = {
 	signal?: AbortSignal;
 };
 
+const DEFAULT_CONCURRENCY = 10;
+
 // maps items concurrently with a sliding window limit.
 // fails fast — one rejection rejects the entire batch.
 export async function mapConcurrent<T, R>(
-	items: T[],
+	items: readonly T[],
 	fn: (item: T) => Promise<R>,
 	options: ConcurrencyOptions = {}
 ): Promise<R[]> {
-	const concurrency = options.concurrency ?? 10;
-	const signal = options.signal;
-	const limit = pLimit(concurrency);
+	const limit = makeLimit(options);
 
-	return Promise.all(
-		items.map(item =>
-			limit(() => {
-				signal?.throwIfAborted();
+	const tasks = items.map(item =>
+		limit(() => {
+			options.signal?.throwIfAborted();
 
-				return fn(item);
-			})
-		)
+			return fn(item);
+		})
 	);
+
+	return Promise.all(tasks);
 }
 
 // maps items concurrently, collecting all results regardless of individual failures.
 // individual fn errors are captured as rejected results; abort signal still kills the batch.
 export async function mapConcurrentSettled<T, R>(
-	items: T[],
+	items: readonly T[],
 	fn: (item: T) => Promise<R>,
 	options: ConcurrencyOptions = {}
 ): Promise<PromiseSettledResult<R>[]> {
-	const concurrency = options.concurrency ?? 10;
-	const signal = options.signal;
-	const limit = pLimit(concurrency);
+	const limit = makeLimit(options);
 
-	return Promise.all(
-		items.map(item =>
-			limit(async (): Promise<PromiseSettledResult<R>> => {
-				signal?.throwIfAborted();
+	const tasks = items.map(item =>
+		limit(async (): Promise<PromiseSettledResult<R>> => {
+			options.signal?.throwIfAborted();
 
-				try {
-					const value = await fn(item);
+			try {
+				const value = await fn(item);
 
-					return { status: 'fulfilled', value };
-				} catch (reason) {
-					return { status: 'rejected', reason };
-				}
-			})
-		)
+				return { status: 'fulfilled', value };
+			} catch (reason) {
+				return { status: 'rejected', reason };
+			}
+		})
 	);
+
+	return Promise.all(tasks);
+}
+
+function makeLimit(options: ConcurrencyOptions) {
+	const concurrency = options.concurrency ?? DEFAULT_CONCURRENCY;
+
+	return pLimit(concurrency);
 }

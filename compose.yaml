@@ -4,14 +4,15 @@ services:
         env_file: .env
         ports:
             - '3000:3000'
-        depends_on:
-            postgres:
-                condition: service_healthy
+        restart: unless-stopped
+        # note: DATABASE_URL in .env must point at a reachable Postgres.
+        # when using the bundled postgres profile (docker compose --profile postgres up),
+        # set DATABASE_URL=postgresql://postgres:postgres@postgres:5432/app
 
     postgres:
         profiles:
             - postgres
-        image: postgres:17-alpine
+        image: postgres:18-alpine
         environment:
             POSTGRES_USER: postgres
             POSTGRES_PASSWORD: postgres
@@ -20,6 +21,7 @@ services:
             - '5432:5432'
         volumes:
             - pgdata:/var/lib/postgresql/data
+        restart: unless-stopped
         healthcheck:
             test: ['CMD-SHELL', 'pg_isready -U postgres -d app']
             interval: 5s

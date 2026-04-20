@@ -13,8 +13,8 @@ type StructuredOptions = CallSettings &
 	};
 
 // generates structured output from an LLM using a Zod schema.
-// wraps generateText + Output.object with retry, null-output handling,
-// and Zod re-validation for type safety.
+// wraps generateText + Output.object with retry and a null-output guard.
+// Output.object already validates against the schema, so no second parse is needed.
 export async function structured<T extends z.ZodType>(schema: T, options: StructuredOptions): Promise<z.infer<T>> {
 	const { retries = 2, ...generateParams } = options;
 
@@ -30,15 +30,15 @@ export async function structured<T extends z.ZodType>(schema: T, options: Struct
 	};
 
 	const output = Output.object(outputConfig);
+	const generateOptions = { ...generateParams, output };
 
 	return retry(async () => {
-		const generateOptions = { ...generateParams, output };
 		const result = await generateText(generateOptions);
 
 		if (!result.output) {
 			throw new Error('model returned no structured output');
 		}
 
-		return schema.parse(result.output);
+		return result.output as z.infer<T>;
 	}, retryOptions);
 }

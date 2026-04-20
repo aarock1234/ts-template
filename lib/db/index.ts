@@ -1,10 +1,29 @@
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 
-import { env } from '@/lib/config/env';
+import { env, NodeEnv } from '@/lib/config/env';
 import * as schema from '@/lib/db/schema';
 
-const client = postgres(env.DATABASE_URL);
+// reuse a single postgres client across Next.js HMR reloads in development.
+// without this, every file save creates a new client and leaks connections
+// until Postgres refuses new ones.
+type GlobalWithPostgres = typeof globalThis & {
+	__postgresClient__?: ReturnType<typeof postgres>;
+};
+
+const globalForDb = globalThis as GlobalWithPostgres;
+
+const client = globalForDb.__postgresClient__ ?? postgres(env.DATABASE_URL);
+
+if (env.NODE_ENV !== NodeEnv.PRODUCTION) {
+	globalForDb.__postgresClient__ = client;
+}
+
 const drizzleOptions = { schema };
 
 export const db = drizzle(client, drizzleOptions);
+
+// closes the underlying postgres client. call this from CLI scripts before exit.
+export async function closeDb(): Promise<void> {
+	await client.end();
+}
