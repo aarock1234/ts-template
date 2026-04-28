@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import type { ReactNode } from 'react';
 
 import './globals.css';
 
@@ -7,7 +8,11 @@ export const metadata: Metadata = {
 	description: 'AI-first TypeScript project template',
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+type RootLayoutProps = {
+	children: ReactNode;
+};
+
+export default function RootLayout({ children }: RootLayoutProps) {
 	return (
 		<html lang="en">
 			<body>{children}</body>

@@ -22,23 +22,24 @@ export async function structured<T extends z.ZodType>(schema: T, options: Struct
 		maxAttempts: retries + 1,
 		signal: generateParams.abortSignal,
 	};
-
-	const outputConfig = {
+	const output = Output.object({
 		schema,
 		name: schema.meta()?.title,
 		description: schema.meta()?.description,
-	};
+	});
 
-	const output = Output.object(outputConfig);
-	const generateOptions = { ...generateParams, output };
-
-	return retry(async () => {
-		const result = await generateText(generateOptions);
+	const generateStructuredText = async () => {
+		const result = await generateText({
+			...generateParams,
+			output,
+		});
 
 		if (!result.output) {
 			throw new Error('model returned no structured output');
 		}
 
 		return result.output as z.infer<T>;
-	}, retryOptions);
+	};
+
+	return retry(generateStructuredText, retryOptions);
 }

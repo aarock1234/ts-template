@@ -1,14 +1,22 @@
 # TypeScript Style Guide
 
-Project-specific TypeScript style guide for an AI-first project template. Favor idiomatic TypeScript over clever abstractions.
+Project-specific TypeScript style guide. Favor idiomatic TypeScript, React, and Next.js over clever abstractions.
 
-**Minimum TypeScript version**: 5.0+ (examples use `satisfies`, `const` type parameters, and modern strict settings).
-**Runtime**: Node.js 22+ (examples use `node:util` `parseArgs`, native `fetch`, `AbortController`).
-**Package manager**: pnpm (never npm or npx; use `pnpm dlx` for one-off commands).
+**Runtime**: Node.js 24+.
+**Package manager**: pnpm.
 
 ## Philosophy
 
-Write boring code. Prefer explicit over implicit. Optimize for reading, not writing. Keep functions small and focused. Use the type system to prevent bugs at compile time. Every abstraction must earn its place — if a plain function works, don't wrap it in a class.
+Write boring code. Prefer explicit over implicit. Optimize for reading, not writing. Let TypeScript, ESLint, Prettier, and framework conventions do their jobs. Add abstractions only when they remove real complexity.
+
+When guidance conflicts, use this order:
+
+1. Correctness, security, and runtime behavior.
+2. Official framework and library idioms.
+3. Existing local patterns.
+4. This guide.
+
+Examples in this file show shape and intent. Do not cargo-cult them into mandatory ceremony. If a small inline value is clearer than a named variable, inline it. If a named variable explains intent, name it.
 
 ## Quick Reference
 
@@ -17,1884 +25,918 @@ Write boring code. Prefer explicit over implicit. Optimize for reading, not writ
 ```bash
 pnpm dev                     # start Next.js dev server
 pnpm build                   # production build
-pnpm lint                    # lint with eslint
-pnpm format                  # format with prettier
-pnpm typecheck               # type check without building
-pnpm db:generate             # generate drizzle migrations
-pnpm db:migrate              # run drizzle migrations
-pnpm db:studio               # open drizzle studio
-pnpm tsx scripts/example.ts  # run a CLI script
+pnpm lint                    # lint with ESLint
+pnpm format                  # format with Prettier
+pnpm format:check            # check formatting
+pnpm typecheck               # Next route types + TypeScript
+pnpm test                    # run Vitest
+pnpm check                   # local verification bundle
+pnpm db:generate             # generate Drizzle migrations
+pnpm db:migrate              # apply Drizzle migrations
+pnpm db:studio               # open Drizzle Studio
+pnpm script scripts/foo.ts   # run a CLI script with env loading
 ```
+
+Use `pnpm` for package management. Use `pnpm dlx` for one-off commands. Do not use `npm`, `npx`, or `yarn` in this project.
 
 ### Import Order
 
-Three groups, blank line between each: external packages, internal modules (path alias), relative imports.
+Group imports as external packages, internal path aliases, then relative imports. Use `import type` for type-only imports.
 
 ```typescript
-import { z } from 'zod';
 import { generateText, Output } from 'ai';
+import type { LanguageModel } from 'ai';
+import { z } from 'zod';
 
 import { env } from '@/lib/config/env';
 import { logger } from '@/lib/log';
 
-import { processDocument } from './process';
-import type { DocumentResult } from './process';
-
-import './side-effects'; // side-effect imports last with comment
+import { processDocument } from './process-document';
+import type { DocumentResult } from './process-document';
 ```
 
-**`import type` vs regular imports:** Use `import type` for types and interfaces (erased at compile time). Regular imports for runtime values. Benefits: smaller bundles, avoids circular dependencies, clearer intent.
+Side-effect imports should be rare. When needed, keep them visibly separate and comment why the import exists.
 
-### Naming Conventions
+### Naming
 
-| Category          | Convention             | Examples                                         |
-| ----------------- | ---------------------- | ------------------------------------------------ |
-| Functions/Methods | camelCase              | `getUser`, `processItems`                        |
-| Variables         | camelCase              | `userId`, `isActive`                             |
-| Booleans          | `is/has/should/can`    | `isActive`, `hasPermission`, `shouldRetry`       |
-| Types/Interfaces  | PascalCase             | `UserConfig`, `ApiResponse`                      |
-| Classes           | PascalCase             | `UserService`, `HttpClient`                      |
-| Constants         | camelCase              | `defaultTimeout`, `maxRetries`                   |
-| Module constants  | SCREAMING_SNAKE        | `MAX_RETRIES`, `DEFAULT_TIMEOUT`                 |
-| Const obj (name)  | PascalCase             | `Status`, `PriorityLevel`                        |
-| Const obj (keys)  | SCREAMING_SNAKE        | `Status.PENDING`, `Status.ACTIVE`                |
-| Zod schemas       | camelCase              | `userSchema`, `createUserSchema`                 |
-| Files             | kebab-case             | `user-service.ts`, `http-client.ts`              |
-| Type parameters   | Single char or `TName` | `T`, `K`, `V` or descriptive `TInput`, `TOutput` |
+Use normal TypeScript naming.
 
-**Boolean names** should read as yes/no questions. This applies to variables, properties, parameters, and functions that return booleans.
+| Category                      | Convention | Examples                              |
+| ----------------------------- | ---------- | ------------------------------------- |
+| Functions and variables       | camelCase  | `loadPrompt`, `modelId`               |
+| Types and classes             | PascalCase | `RetryOptions`, `AppError`            |
+| Const objects used like enums | PascalCase | `NodeEnv`, `LogLevel`                 |
+| Zod schemas                   | camelCase  | `summarySchema`                       |
+| Files                         | kebab-case | `server-only.ts`, `document-store.ts` |
 
-```typescript
-// GOOD: reads as a question
-const isValid = schema.safeParse(data).success;
-const hasChildren = node.children.length > 0;
-function shouldRetry(attempt: number, error: Error): boolean {
-	/* ... */
-}
+Boolean names should read like questions when practical: `isReady`, `hasToken`, `shouldRetry`.
 
-// BAD: ambiguous
-const valid = schema.safeParse(data).success;
-const children = node.children.length > 0;
-function retry(attempt: number, error: Error): boolean {
-	/* ... */
-}
-```
+Do not contort names to match a pattern. A name that clearly describes the local concept wins.
 
-## Exports
+## Modules and Exports
 
-**Inline exports.** Export at the declaration site, not at the bottom of the file. The export travels with the code, so intent is visible immediately.
+Use named exports for normal modules. Default exports are fine when a framework expects them, such as Next.js pages, layouts, error boundaries, and route handlers.
+
+Avoid barrel files that only re-export other modules. Import from the concrete module that owns the code.
 
 ```typescript
-// GOOD: inline export
-export const MAX_RETRIES = 3;
-
-export type UserConfig = {
-	timeout: number;
-	retries: number;
-};
-
-export function getUser(id: string): Promise<User> {
-	const query = { where: eq(users.id, id) };
-	return db.query.users.findFirst(query);
-}
-
-// BAD: bottom-of-file export list
-const MAX_RETRIES = 3;
-function getUser(id: string): Promise<User> {
-	/* ... */
-}
-export { MAX_RETRIES, getUser }; // DON'T DO THIS
-```
-
-**Named exports over default exports.** Named exports are grep-friendly, refactor-safe, and give consistent names across the codebase. Default exports create ambiguity — the consumer can name the import anything.
-
-```typescript
-// GOOD: named export
-export function createLogger(name: string): Logger {
-	/* ... */
-}
-
-// BAD: default export
-export default function createLogger(name: string): Logger {
-	/* ... */
-}
-```
-
-The one exception: framework conventions that require default exports (Next.js pages, layout, route handlers). Follow the framework's convention in those cases.
-
-**`export type` for type-only exports.** Mirrors `import type` — erased at compile time, keeps the runtime bundle clean.
-
-```typescript
-export type UserId = Brand<string, 'UserId'>;
-export type ApiResponse = {
-	data: unknown;
-	status: number;
-};
-```
-
-**No barrel files.** Do not create `index.ts` files that re-export from other files. Import directly from source. Barrel files obscure where code lives, create circular dependency traps, and hurt tree-shaking.
-
-```typescript
-// BAD: importing from barrel
-import { logger, env, retry } from '@/lib';
-
-// GOOD: import from source
-import { logger } from '@/lib/log';
-import { env } from '@/lib/config/env';
+// Good: direct imports from owning modules.
+import { db } from '@/lib/db/client';
 import { retry } from '@/lib/retry';
+
+// Avoid: broad barrel imports hide ownership.
+import { db, retry } from '@/lib';
 ```
 
-## Variables
+An `index.ts` file is fine when it is a real implementation module. The problem is re-export barrels, not the filename itself.
 
-`const` by default. `let` only when reassignment is needed. Never `var`.
+Keep server-only and client-safe modules separate:
+
+- Server-only modules may read env vars, secrets, the filesystem, or database clients.
+- Client components must not import server-only modules.
+- Shared pure helpers should not import server-only state.
+
+## Formatting
+
+Let Prettier format code. Do not manually reshape code around arbitrary line breaks.
+
+Inline small objects when that is clearer:
 
 ```typescript
-// GOOD
-const maxRetries = 3;
-const users = await fetchUsers(); // const binds the reference, not the value
-
-let attempt = 0;
-while (attempt < maxRetries) {
-	attempt += 1;
-}
-
-// BAD
-var timeout = 5000; // never var
-let baseUrl = 'https://api.example.com'; // never reassigned — use const
+return Response.json({ status: 'error' }, { status: 503 });
 ```
 
-## Comments
-
-Plain comments directly above declarations. No section banners, separators, or decorative markers.
+Use multi-line objects for semantic records, nested options, and arrays of objects. This is especially important for AI SDK messages, Drizzle column definitions, route payloads with multiple fields, and provider options.
 
 ```typescript
-// BAD: section banners
-// ---------------------------------------------------------------------------
-// Zod schemas
-// ---------------------------------------------------------------------------
-
-// BAD: other banner styles
-// ========================
-// Helper functions
-// ========================
-
-// ********** Constants **********
-```
-
-```typescript
-// GOOD: doc comment above the declaration when clarification is needed
-// Validates user input before persistence; strips unknown keys.
-const userSchema = z.object({
-	/* ... */
-});
-
-// Retries with exponential backoff; gives up after the configured max attempts.
-async function fetchWithRetry(url: string, options: FetchOptions): Promise<Response> {
-	// ...
-}
-```
-
-Rules:
-
-- Comment directly above the thing you're documenting.
-- Explain _what_ or _why_, not _what section we're in_.
-- If code is self-explanatory, don't comment at all.
-- Never use decorative separators to create visual sections.
-- Use file/module boundaries (separate files) to organize code, not comments.
-
-## Functions
-
-### Arrow Functions vs Declarations
-
-Use `function` declarations for top-level and exported functions. Use arrow functions for callbacks and inline expressions. Use method shorthand in objects.
-
-```typescript
-// GOOD: function declaration for top-level / exported
-export function createUser(input: CreateUserInput): Promise<User> {
-	// ...
-}
-
-// GOOD: arrow for callbacks
-const activeUsers = users.filter(user => user.isActive);
-
-// GOOD: method shorthand in objects
-const userRepository = {
-	async findById(id: string) {
-		const query = { where: eq(users.id, id) };
-		return db.query.users.findFirst(query);
+const messages: ModelMessage[] = [
+	{
+		role: 'user',
+		content: document.content,
 	},
-};
+];
 
-// BAD: arrow for top-level (no hoisting, anonymous in stack traces)
-export const createUser = async (input: CreateUserInput): Promise<User> => {
-	// ...
+const documentInput = {
+	title: document.title,
+	content: document.content,
+	source: document.source,
 };
 ```
 
-**Why:** `function` declarations are hoisted, show the function name in stack traces, and stand out visually as top-level units. Arrows are concise and capture `this` lexically, making them ideal for callbacks.
-
-### Explicit Return Types
-
-Write explicit return types on exported functions. Omit them on internal functions where inference is clear.
+Name values when the name explains intent, the value is reused, or the inline expression becomes noisy:
 
 ```typescript
-// GOOD: explicit on exports — documents the contract
-export function getUser(id: string): Promise<User> {
-	const query = { where: eq(users.id, id) };
-	return db.query.users.findFirst(query);
+const retryOptions = {
+	maxAttempts: retries + 1,
+	signal: generateParams.abortSignal,
+};
+
+return retry(runGeneration, retryOptions);
+```
+
+Use blank lines to separate logical groups inside a function. Closely related lines can stay together. If three or more unrelated statements stack up, split them into small groups.
+
+```typescript
+async function processItems(items: readonly Item[]): Promise<number> {
+	let total = 0;
+
+	for (const item of items) {
+		if (!item.isValid) {
+			continue;
+		}
+
+		const value = await transform(item);
+		total += value;
+	}
+
+	if (total === 0) {
+		throw new Error('no valid items to process');
+	}
+
+	return total;
+}
+```
+
+Array methods are good when the operation stays obvious. Prefer a plain loop when a chain mixes filtering, async work, mutation, branching, or error handling. Loops are often more idiomatic than clever pipelines in application code.
+
+## Functions and Control Flow
+
+Use function declarations for exported and top-level functions. Use arrow functions for callbacks and short inline expressions.
+
+```typescript
+export function loadPrompt(name: string): string {
+	return readPrompt(name);
 }
 
-// GOOD: omit on internal functions where obvious
-function buildWhereClause(filters: Filters) {
-	return {
-		...(filters.status && { status: filters.status }),
-		...(filters.createdAfter && { createdAt: { gte: filters.createdAfter } }),
-	};
-}
-
-// GOOD: omit on simple callbacks
 const names = users.map(user => user.name);
 ```
 
-### Functions Over Classes
+Write explicit return types on exported functions. Internal helpers can rely on inference when it is obvious.
 
-Prefer plain functions and closures over classes. Use classes only when you need stateful instances with multiple methods that share private state.
+Prefer guard clauses for invalid states and early exits:
 
 ```typescript
-// GOOD: plain function — simple, composable, testable
-export function createRetry(options: RetryOptions = {}) {
-	const maxAttempts = options.maxAttempts ?? 3;
-	const baseDelay = options.baseDelay ?? 1000;
+function requireInput(input: string | undefined): string {
+	if (!input) {
+		throw new Error('--input is required');
+	}
 
-	return async function retry<T>(fn: () => Promise<T>): Promise<T> {
-		// ...
-	};
+	return input;
 }
-
-// GOOD: class when multiple methods share state
-export class DatabasePool {
-	private readonly pool: Pool;
-
-	constructor(connectionString: string) {
-		this.pool = new Pool(connectionString);
-	}
-
-	async query<T>(sql: string, params?: unknown[]): Promise<T[]> {
-		/* ... */
-	}
-	async transaction<T>(fn: (tx: Transaction) => Promise<T>): Promise<T> {
-		/* ... */
-	}
-	async close(): Promise<void> {
-		/* ... */
-	}
-}
-
-// BAD: class for what should be a function
-class UserValidator {
-	validate(input: unknown): User {
-		return userSchema.parse(input);
-	}
-}
-// just use: const user = userSchema.parse(input)
 ```
 
-### Options Pattern
+Use `async`/`await` instead of promise chains. Do not mark a function `async` unless it awaits or intentionally returns a promise from an async API.
 
-For functions or constructors with complex configuration, use an options object with defaults via destructuring or nullish coalescing.
+Use ternaries for simple expressions. Avoid nested ternaries; extract a helper when the logic starts to branch.
 
 ```typescript
-type RetryOptions = {
-	maxAttempts?: number;
-	baseDelay?: number;
-	maxDelay?: number;
-	multiplier?: number;
-};
+const label = isActive ? 'active' : 'inactive';
 
-export function retry<T>(fn: () => Promise<T>, options: RetryOptions = {}): Promise<T> {
-	const maxAttempts = options.maxAttempts ?? 3;
-	const baseDelay = options.baseDelay ?? 1000;
-	const maxDelay = options.maxDelay ?? 10_000;
-	const multiplier = options.multiplier ?? 2;
+function roleLabel(role: Role): string {
+	switch (role) {
+		case Role.ADMIN:
+			return 'admin';
+		case Role.USER:
+			return 'user';
+	}
+}
+```
+
+### Collection Transformations
+
+Use `map`, `filter`, and `reduce` when the transformation is short and obvious. Use `for...of` when the work has branching, async operations, multiple outputs, logging, error handling, or named intermediate steps.
+
+```typescript
+// Good: obvious one-step transformation.
+const titles = documents.map(document => document.title);
+
+// Good: loop makes the branching and side effects visible.
+const summaries: Summary[] = [];
+
+for (const document of documents) {
+	if (document.content.trim() === '') {
+		continue;
+	}
+
+	const summary = await summarize(document);
+	summaries.push(summary);
+}
+```
+
+Avoid `reduce` for code that has to be mentally executed to understand it. A few extra lines with `let total = 0` is often clearer.
+
+### API Design
+
+Design exported functions around the caller. Keep the call site readable.
+
+Use positional arguments for one or two obvious required values. Use an options object when there are optional settings, booleans, callbacks, or more than two parameters.
+
+```typescript
+// Good: required value + optional behavior.
+export function loadPrompt(name: string, vars: PromptVars = {}): string {
 	// ...
 }
 
-// Usage
-const retryOptions = { maxAttempts: 5 };
-const result = await retry(() => fetchData(), retryOptions);
-```
-
-## Control Flow
-
-### Guard Clauses
-
-Handle invalid cases first and return/throw early. This eliminates nesting and keeps the main logic at the top indentation level.
-
-```typescript
-// BAD: nested conditionals
-async function updateUser(id: string, input: UpdateUserInput): Promise<User> {
-	const user = await db.query.users.findFirst({ where: eq(users.id, id) });
-	if (user) {
-		if (user.isActive) {
-			return db.update(users).set(input).where(eq(users.id, id)).returning();
-		} else {
-			throw new ForbiddenError(`user ${id} is deactivated`);
-		}
-	} else {
-		throw new NotFoundError(`user ${id}`);
-	}
+// Good: options object keeps the call site self-documenting.
+export async function retry<T>(operation: () => Promise<T>, options: RetryOptions = {}): Promise<T> {
+	// ...
 }
 
-// GOOD: guard clauses, flat structure
-async function updateUser(id: string, input: UpdateUserInput): Promise<User> {
-	const query = { where: eq(users.id, id) };
-	const user = await db.query.users.findFirst(query);
+await retry(fetchDocument, {
+	maxAttempts: 3,
+	signal,
+});
+```
 
-	if (!user) {
-		throw new NotFoundError(`user ${id}`);
-	}
+Avoid boolean parameters in public APIs. They make call sites cryptic.
 
-	if (!user.isActive) {
-		throw new ForbiddenError(`user ${id} is deactivated`);
-	}
+```typescript
+// Avoid: what does true mean?
+await generateSummary(document, true);
 
-	return db.update(users).set(input).where(eq(users.id, id)).returning();
+// Better: caller names the behavior.
+await generateSummary(document, { includeKeyPoints: true });
+```
+
+Return concrete values. Do not wrap everything in a custom `Result` type unless the codebase has committed to that pattern. In TypeScript application code, throwing at internal layers and handling at boundaries is usually clearer.
+
+Use generics when they preserve information for the caller. Avoid generics that only make implementation code look abstract.
+
+```typescript
+// Good: schema determines the return type.
+export async function structured<T extends z.ZodType>(schema: T, options: StructuredOptions): Promise<z.infer<T>> {
+	// ...
+}
+
+// Avoid: generic name with no useful constraint or caller benefit.
+function process<T>(value: T): T {
+	return value;
 }
 ```
 
-The pattern: validate preconditions at the top, exit early on failure, then proceed with the happy path unindented. Always use blocks for `if` statements — no braceless one-liners.
+Name callback parameters after their role when the function is exported or reused. `callback` is acceptable when the role is literally a callback. `fn` is fine in tiny local helpers, but names like `operation`, `mapper`, `predicate`, `loader`, or `task` usually read better at API boundaries.
 
-### Ternaries
+### Abstractions and Classes
 
-Use ternaries for simple, single-condition expressions. Never nest them.
+Prefer plain functions and modules. Add classes only when you need stateful instances with multiple methods that share private state.
 
 ```typescript
-// GOOD: simple ternary
-const label = isActive ? 'enabled' : 'disabled';
-const timeout = isProduction ? 30_000 : 5_000;
-
-// BAD: nested ternary
-const label = isAdmin ? 'admin' : isModerator ? 'moderator' : 'user';
-
-// GOOD: extract to a function
-function getRoleLabel(user: User): string {
-	if (user.isAdmin) return 'admin';
-	if (user.isModerator) return 'moderator';
-
-	return 'user';
+// Good: module-level function for stateless behavior.
+export function schemaBlock(schema: z.ZodType): string {
+	return `\`\`\`json\n${JSON.stringify(toJSONSchema(schema), null, 2)}\n\`\`\``;
 }
-```
 
-## Strings
+// Good: class when the instance owns state and behavior.
+export class RateLimiter {
+	readonly #limit: number;
+	#activeCount = 0;
 
-### Prefer Template Literals Over Concatenation
-
-Use template literals for building strings. Never use string concatenation (`+`) unless building strings incrementally in a loop.
-
-```typescript
-// BAD: concatenation
-const greeting = 'hello, ' + name + '!';
-const url = baseUrl + '/users/' + userId + '/posts';
-
-// GOOD: template literals
-const greeting = `hello, ${name}!`;
-const url = `${baseUrl}/users/${userId}/posts`;
-
-// ACCEPTABLE: concatenation in a loop accumulator
-let csv = '';
-for (const row of rows) {
-	csv += row.join(',') + '\n';
-}
-```
-
-## Object Literals
-
-Use multiline format for objects with two or more properties. Single-property objects may stay on one line. This also applies to type definitions and nested objects.
-
-```typescript
-// GOOD: multiline for two or more
-const config = {
-	timeout: 5000,
-	retries: 3,
-};
-
-// GOOD: single-property on one line
-return { data };
-const failure = { cause: error };
-throw new AppError('failed', failure);
-
-// BAD: multiple properties on one line
-const config = { timeout: 5000, retries: 3 };
-```
-
-### Never Pass Inline Objects as Function Arguments
-
-Always assign objects to a named variable before passing them. This makes call sites readable and diffs cleaner.
-
-```typescript
-// BAD
-await retry(() => fetchData(), { maxAttempts: 5 });
-
-// GOOD
-const retryOptions = { maxAttempts: 5 };
-await retry(() => fetchData(), retryOptions);
-```
-
-## Error Handling
-
-### Basic Pattern
-
-Throw custom errors with context. Let errors propagate — log at the boundary (API route handler, CLI script entry point), not at every layer.
-
-```typescript
-async function getUser(id: string): Promise<User> {
-	const query = { where: eq(users.id, id) };
-	const user = await db.query.users.findFirst(query);
-
-	if (!user) {
-		throw new NotFoundError(`user ${id}`);
+	constructor(limit: number) {
+		this.#limit = limit;
 	}
 
-	return user;
-}
-```
-
-Handle an error or propagate it; never both. Logging and re-throwing creates duplicate noise up the call chain.
-
-```typescript
-// BAD: logs and throws — caller will likely log again
-try {
-	return await fetchData(id);
-} catch (error) {
-	logger.error({ err: error }, 'failed to fetch data');
-	throw error; // duplicate logging at every layer
-}
-
-// GOOD: propagate, let the boundary decide
-return await fetchData(id);
-```
-
-Error messages: lowercase, no trailing punctuation, add context.
-
-### Custom Error Classes
-
-For expected error conditions. Check with `instanceof`.
-
-```typescript
-export class AppError extends Error {
-	constructor(
-		message: string,
-		public readonly code: string,
-		public readonly statusCode: number = 500
-	) {
-		super(message);
-		this.name = this.constructor.name;
-	}
-}
-
-export class NotFoundError extends AppError {
-	constructor(resource: string) {
-		super(`${resource} not found`, 'NOT_FOUND', 404);
-	}
-}
-
-export class ValidationError extends AppError {
-	constructor(
-		message: string,
-		public readonly field?: string
-	) {
-		super(message, 'VALIDATION_ERROR', 400);
-	}
-}
-
-// Usage
-if (error instanceof NotFoundError) {
-	// handle not found
-}
-```
-
-### Error Handling at Boundaries
-
-Handle errors at the outermost layer — API route handlers, CLI script entry points. Convert domain errors to appropriate responses.
-
-```typescript
-// Next.js API route
-export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }): Promise<Response> {
-	try {
-		const { id } = await params;
-		const user = await getUser(id);
-
-		return Response.json(user);
-	} catch (error) {
-		if (error instanceof NotFoundError) {
-			const body = { error: error.message };
-			const responseOptions = { status: 404 };
-			return Response.json(body, responseOptions);
-		}
-
-		const context = { err: error };
-		logger.error(context, 'get user failed');
-
-		const body = { error: 'internal error' };
-		const responseOptions = { status: 500 };
-		return Response.json(body, responseOptions);
+	canStart(): boolean {
+		return this.#activeCount < this.#limit;
 	}
 }
 ```
+
+Avoid manager/service classes that only group unrelated functions. A file with named exports is simpler until shared state or a stable public object model appears.
+
+Do not introduce interfaces before there is a second implementation or a useful test seam. Accepting a tiny structural type at the consumer can be clearer than exporting a broad abstraction from the producer.
 
 ## Type Safety
 
-### Never Use `any` Unless Absolutely Necessary
-
-Order of preference: Fully typed → Generics → Semi-typed → `unknown` → `any` (last resort)
+Avoid `any`. Use concrete types, generics, or `unknown` with narrowing.
 
 ```typescript
-// BAD: any everywhere
-function findItem(items: any[], id: string): any {
-	return items.find(item => item.id === id);
+// Good: caller gets a typed value.
+function parseJson<T>(text: string, schema: z.ZodType<T>): T {
+	return schema.parse(JSON.parse(text));
 }
 
-// GOOD: generic constraint
-type Identifiable = { id: string };
-
-function findItem<T extends Identifiable>(items: T[], id: string): T | undefined {
-	return items.find(item => item.id === id);
-}
-
-// GOOD: multiple constraints
-type Timestamped = { createdAt: Date };
-
-function sortByCreation<T extends Identifiable & Timestamped>(items: T[]): T[] {
-	return [...items].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+// Good: unknown forces validation before use.
+function readPayload(value: unknown): Payload {
+	return payloadSchema.parse(value);
 }
 ```
 
-### Order of Preference
+Prefer `type` for data shapes, unions, and function signatures. Use `interface` when declaration merging or class implementation contracts are useful.
 
 ```typescript
-// 1. BEST: Fully typed
-type ProcessorConfig = {
-	timeout: number;
-	retries: number;
-	endpoint: string;
+type DocumentInput = {
+	title: string;
+	content: string;
 };
 
-// 2. ACCEPTABLE: Semi-typed with known key types
-type HandlerMap = Record<string, (ctx: Context) => Promise<void>>;
-
-// 3. ACCEPTABLE: unknown for truly dynamic data
-function parseJson(json: string): unknown {
-	return JSON.parse(json);
-}
-
-// 4. LAST RESORT: any
-type DynamicHandlers = Record<string, any>; // only when handlers have varying signatures
+type Handler = (request: Request) => Promise<Response>;
 ```
 
-### Avoid Non-null Assertion (`!`)
-
-The `!` operator silences the type checker without adding any runtime safety. Prefer proper narrowing, optional chaining, or an explicit throw.
+Use `satisfies` when checking object shape while preserving literal types:
 
 ```typescript
-// BAD: non-null assertion hides potential null bugs
-const name = user!.name;
-const first = items.find(i => i.isActive)!;
-
-// GOOD: narrow with a check
-if (!user) {
-	throw new NotFoundError('user');
-}
-const name = user.name;
-
-// GOOD: optional chaining when null is acceptable
-const name = user?.name ?? 'anonymous';
-```
-
-The only acceptable use is in test code where a preceding assertion guarantees the value exists.
-
-### JSON: Always Use Types with Zod Validation
-
-```typescript
-// BAD: Record<string, any>
-function handleRequest(data: Record<string, any>) {
-	const name = data.name as string; // unsafe assertion
-}
-
-// GOOD: Zod schema as single source of truth
-const requestSchema = z.object({
-	name: z.string(),
-	age: z.number(),
-	email: z.string().email().optional(),
-});
-
-type Request = z.infer<typeof requestSchema>;
-
-function handleRequest(data: unknown): Request {
-	return requestSchema.parse(data); // runtime validation + type safety
-}
-```
-
-### Interface vs Type
-
-Prefer `type` for most cases. Use `interface` only when you need declaration merging or class implementation contracts.
-
-```typescript
-// PREFERRED: type for data shapes, unions, function signatures
-type User = {
-	id: string;
-	name: string;
-	email: string;
-};
-
-type Status = 'pending' | 'active' | 'completed';
-type Handler = (req: Request) => Promise<Response>;
-
-// USE interface: for class implementation contracts
-interface Repository<T> {
-	findById(id: string): Promise<T | null>;
-	save(item: T): Promise<void>;
-}
-```
-
-### The `satisfies` Operator
-
-Use `satisfies` to validate a value matches a type while preserving its literal type.
-
-```typescript
-// BAD: type annotation widens literals
-const config: Record<string, string> = {
-	apiUrl: 'https://api.example.com',
-	env: 'production',
-};
-config.typo; // no error — Record allows any string key
-
-// GOOD: satisfies validates AND preserves literals
-const config = {
-	apiUrl: 'https://api.example.com',
-	env: 'production',
-} satisfies Record<string, string>;
-
-config.apiUrl; // type: "https://api.example.com" (literal preserved)
-config.typo; // error: property 'typo' does not exist
-```
-
-### Type Guards and Predicates
-
-Use type predicates (`is`) to narrow types in conditional checks.
-
-```typescript
-function isUser(value: unknown): value is User {
-	return typeof value === 'object' && value !== null && 'id' in value && 'email' in value;
-}
-
-// Array filtering with type guards
-const mixed: (string | number)[] = [1, 'two', 3, 'four'];
-const strings = mixed.filter((x): x is string => typeof x === 'string');
-
-// Assertion functions (throws if not valid)
-function assertIsUser(value: unknown): asserts value is User {
-	if (!isUser(value)) {
-		throw new Error('expected user');
-	}
-}
-```
-
-### Exhaustive Switch
-
-Use the `never` trick to make the compiler catch unhandled cases. If a new variant is added later, every switch that missed it becomes a compile error.
-
-```typescript
-const Status = {
-	PENDING: 'pending',
-	ACTIVE: 'active',
-	COMPLETED: 'completed',
-} as const;
-
-type Status = (typeof Status)[keyof typeof Status];
-
-function getStatusLabel(status: Status): string {
-	switch (status) {
-		case Status.PENDING:
-			return 'waiting';
-		case Status.ACTIVE:
-			return 'running';
-		case Status.COMPLETED:
-			return 'done';
-		default: {
-			const _exhaustive: never = status;
-			throw new Error(`unhandled status: ${_exhaustive}`);
-		}
-	}
-}
-```
-
-### Branded Types (Nominal Typing)
-
-Prevent mixing up values that share the same base type.
-
-```typescript
-type Brand<T, B> = T & { readonly __brand: B };
-
-type UserId = Brand<string, 'UserId'>;
-type PostId = Brand<string, 'PostId'>;
-
-function UserId(id: string): UserId {
-	return id as UserId;
-}
-
-function PostId(id: string): PostId {
-	return id as PostId;
-}
-
-// Now the compiler catches mistakes
-function getUser(userId: UserId): Promise<User> {
-	/* ... */
-}
-
-const userId = UserId('user-123');
-const postId = PostId('post-456');
-
-getUser(userId); // ok
-getUser(postId); // error: PostId not assignable to UserId
-```
-
-### Null vs Undefined Convention
-
-`undefined` is for structural absence (optional properties, `Map.get` misses, `Array.find` failures). `null` is for intentional "no value" chosen by the developer.
-
-```typescript
-// undefined: structural absence
-type User = {
-	id: string;
-	nickname?: string; // string | undefined
-};
-
-function findUser(id: string): User | undefined {
-	/* ... */
-}
-
-// null: intentional "no value"
-type Form = {
-	selectedUser: User | null; // null = explicitly no selection
-};
-
-const [data, setData] = useState<User | null>(null); // not yet loaded
-
-// Nullish coalescing (??) vs OR (||)
-const count = input ?? 0; // only null/undefined trigger fallback
-const count2 = input || 0; // 0, "", false also trigger (usually wrong)
-```
-
-### Readonly and Immutability
-
-Prefer immutable data. Use `readonly` for arrays and properties that shouldn't change.
-
-```typescript
-type User = {
-	readonly id: string;
-	readonly createdAt: Date;
-	name: string; // mutable
-};
-
-function processItems(items: readonly string[]) {
-	items.push('new'); // error: push doesn't exist on readonly array
-	return [...items, 'new']; // must create new array
-}
-
-// const assertion for literal immutability
-const config = {
-	api: {
-		url: 'https://api.example.com',
-		timeout: 5000,
-	},
-	features: ['auth', 'logging'],
-} as const;
-// all properties are readonly, literal types preserved
-```
-
-## Constants and Enums
-
-Use const objects with `as const`. Avoid TypeScript `enum`.
-
-```typescript
-// PREFERRED: const object (SCREAMING_SNAKE keys)
-export const Status = {
-	PENDING: 'pending',
-	ACTIVE: 'active',
-	COMPLETED: 'completed',
-} as const;
-
-export type Status = (typeof Status)[keyof typeof Status];
-
-// Usage
-function processStatus(status: Status) {
-	if (status === Status.PENDING) {
-		// handle pending
-	}
-}
-
-// AVOID: TypeScript enum
-// enum Status { Pending, Active, Completed } // DON'T DO THIS
-
-// ACCEPTABLE: string literal union for simple cases
-type Priority = 'low' | 'medium' | 'high';
-```
-
-## Zod Schema Validation
-
-Define schema first, infer type. Zod provides runtime validation and is the single source of truth.
-
-**Note:** This project uses Zod v4. `z.nativeEnum()` is deprecated; use `z.enum()` instead.
-
-### Schema-First Design
-
-```typescript
-import { z } from 'zod';
-
-const userSchema = z.object({
-	id: z.string().uuid(),
-	name: z.string().min(1),
-	email: z.string().email(),
-	role: z.enum(['admin', 'user']),
-	createdAt: z.date(),
-});
-
-type User = z.infer<typeof userSchema>;
-
-// Derived schemas
-const omittedUserFields = {
-	id: true,
-	createdAt: true,
-};
-const createUserSchema = userSchema.omit(omittedUserFields);
-type CreateUserInput = z.infer<typeof createUserSchema>;
-
-const updateUserSchema = createUserSchema.partial();
-type UpdateUserInput = z.infer<typeof updateUserSchema>;
-
-// BAD: defining types first then duplicating in schema
-// type User = { id: string; name: string } // don't define separately
-```
-
-### Enums with Const Objects
-
-```typescript
-const PriorityLevel = {
-	LOW: 'low',
-	MEDIUM: 'medium',
-	HIGH: 'high',
-} as const;
-
-type PriorityLevel = (typeof PriorityLevel)[keyof typeof PriorityLevel];
-
-// Extract values for z.enum (requires tuple assertion)
-const priorityValues = Object.values(PriorityLevel) as [PriorityLevel, ...PriorityLevel[]];
-
-const taskSchema = z.object({
-	title: z.string(),
-	priority: z.enum(priorityValues),
-});
-```
-
-### Schemas for AI Structured Output
-
-When schemas are used with the AI SDK's `Output.object()`, add `.meta()` with descriptions for every field. The model uses these descriptions to understand what to generate.
-
-```typescript
-const extractedEntitySchema = z
-	.object({
-		name: z.string().meta({ description: 'the canonical name of the entity' }),
-		type: z.enum(['person', 'organization', 'location']).meta({
-			description: 'the entity type',
-		}),
-		confidence: z.number().min(0).max(1).meta({
-			description: 'extraction confidence between 0 and 1',
-		}),
-	})
-	.meta({
-		title: 'ExtractedEntity',
-		description: 'a named entity extracted from text',
-		strict: true, // strict mode on top-level schema for structured output
-	});
-
-type ExtractedEntity = z.infer<typeof extractedEntitySchema>;
-```
-
-### Parsing and Validation
-
-```typescript
-// Throws ZodError on invalid data
-function processItem(data: unknown): Item {
-	return itemSchema.parse(data);
-}
-
-// Returns result object instead of throwing
-function safeProcessItem(data: unknown): Item | null {
-	const result = itemSchema.safeParse(data);
-
-	return result.success ? result.data : null;
-}
-
-// With error logging
-function parseItemWithErrors(data: unknown): Item | null {
-	const result = itemSchema.safeParse(data);
-
-	if (!result.success) {
-		const context = { errors: result.error.flatten() };
-		logger.error(context, 'validation failed');
-
-		return null;
-	}
-
-	return result.data;
-}
-```
-
-## Async Patterns
-
-### Async/Await
-
-Always use async/await over raw Promise chains.
-
-```typescript
-// BAD: Promise chains
-function getUser(id: string) {
-	return db.query.users.findFirst({ where: eq(users.id, id) }).then(user => {
-		if (!user) throw new NotFoundError('user');
-		return user;
-	});
-}
-
-// GOOD: async/await
-async function getUser(id: string): Promise<User> {
-	const query = { where: eq(users.id, id) };
-	const user = await db.query.users.findFirst(query);
-
-	if (!user) {
-		throw new NotFoundError('user');
-	}
-
-	return user;
-}
-```
-
-### Parallel Operations
-
-```typescript
-// Parallel fetch — all must succeed
-async function fetchUserData(userId: string) {
-	const [user, posts, followers] = await Promise.all([
-		getUser(userId),
-		getUserPosts(userId),
-		getUserFollowers(userId),
-	]);
-
-	return {
-		user,
-		posts,
-		followers,
-	};
-}
-
-// Independent operations — partial failure is ok
-async function fetchUserDataSafe(userId: string) {
-	const [userResult, postsResult] = await Promise.allSettled([getUser(userId), getUserPosts(userId)]);
-
-	return {
-		user: userResult.status === 'fulfilled' ? userResult.value : null,
-		posts: postsResult.status === 'fulfilled' ? postsResult.value : [],
-	};
-}
-```
-
-### Bounded Concurrency
-
-When processing many items concurrently (e.g., AI API calls), limit concurrency to avoid overwhelming the API or exhausting resources.
-
-```typescript
-import pLimit from 'p-limit';
-
-// Sliding window concurrency — starts next item as soon as one finishes
-const limit = pLimit(10);
-const results = await Promise.all(items.map(item => limit(() => processItem(item))));
-```
-
-Prefer `p-limit` over chunked batching. Chunked batching (`Promise.all` per chunk) wastes time waiting for the slowest item in each chunk before starting the next. `p-limit` keeps all slots busy.
-
-```typescript
-// BAD: chunked batching — slow items block the whole chunk
-for (let i = 0; i < items.length; i += 10) {
-	const chunk = items.slice(i, i + 10);
-	await Promise.all(chunk.map(processItem)); // waits for slowest in chunk
-}
-
-// GOOD: p-limit — starts next item as soon as a slot opens
-const limit = pLimit(10);
-await Promise.all(items.map(item => limit(() => processItem(item))));
-```
-
-## Project Structure
-
-```
-project/
-├── app/                          # Next.js App Router
-│   ├── layout.tsx                # root layout
-│   ├── page.tsx                  # home page
-│   ├── error.tsx                 # error boundary
-│   └── api/                      # API routes
-│       └── health/
-│           └── route.ts
-│
-├── components/                   # React components
-│
-├── lib/                          # shared libraries — the core
-│   ├── ai/                       # AI SDK utilities
-│   │   ├── provider.ts           # provider init + option presets
-│   │   ├── prompts.ts            # prompt loader + schemaBlock
-│   │   ├── structured.ts         # structured output wrapper
-│   │   └── stream.ts             # stream wrapper
-│   ├── db/                       # Drizzle ORM
-│   │   ├── index.ts              # connection pool
-│   │   ├── schema.ts             # table definitions
-│   │   └── migrations/           # generated migrations
-│   ├── config/
-│   │   └── env.ts                # Zod-validated environment
-│   ├── log.ts                    # pino structured logger
-│   ├── errors.ts                 # application error types
-│   ├── retry.ts                  # exponential backoff with jitter
-│   └── concurrency.ts            # bounded parallel execution
-│
-├── prompts/                      # markdown prompt templates
-│   └── example.md
-│
-├── scripts/                      # CLI scripts (run with tsx)
-│   └── example.ts
-│
-├── .llm/
-│   └── STYLE.md                  # this file
-├── .env.example
-├── drizzle.config.ts
-├── eslint.config.ts
-├── next.config.ts
-├── package.json
-├── tsconfig.json
-├── Dockerfile
-├── compose.yaml
-└── README.md
-```
-
-### Where Does Code Go?
-
-| You want to...                       | Put it in...         |
-| ------------------------------------ | -------------------- |
-| Add a web page                       | `app/`               |
-| Add an API endpoint                  | `app/api/`           |
-| Add a React component                | `components/`        |
-| Add shared business logic            | `lib/`               |
-| Add AI utilities (provider, prompts) | `lib/ai/`            |
-| Add a database table                 | `lib/db/schema.ts`   |
-| Add a new prompt template            | `prompts/`           |
-| Add a CLI script                     | `scripts/`           |
-| Add a new shared utility             | `lib/` (single file) |
-
-### File Organization Rules
-
-- **No `index.ts` barrel files.** Import directly from source.
-- **No `types.ts` files.** Co-locate types with the code that uses them.
-- **Single-file utilities stay as files.** `lib/retry.ts`, not `lib/retry/index.ts`. If a utility grows to need multiple files, it becomes a directory.
-- **Zod schemas live where they're used.** Don't create a central `schemas/` directory.
-- **No `utils/` dump.** Every file in `lib/` has a clear, specific purpose.
-
-## Configuration
-
-### Environment Variables
-
-Use Zod to validate environment variables at startup. Fail fast on invalid or missing config.
-
-```typescript
-// lib/config/env.ts
-import { z } from 'zod';
-
-const envSchema = z.object({
-	NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
-	DATABASE_URL: z.string().url(),
-	OPENROUTER_API_KEY: z.string().min(1),
-	LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
-});
-
-export type Env = z.infer<typeof envSchema>;
-
-export const env = envSchema.parse(process.env);
-```
-
-This gives you:
-
-- Type-safe `env.DATABASE_URL` across the codebase (no `process.env` scattered everywhere)
-- Immediate crash at startup if required variables are missing
-- Default values declared in one place
-- Zero dependencies beyond Zod (already required by the AI SDK)
-
-```typescript
-// GOOD: import env from the config module
-import { env } from '@/lib/config/env';
-
-const pool = createPool(env.DATABASE_URL);
-
-// BAD: reading process.env directly
-const pool = createPool(process.env.DATABASE_URL!); // unsafe, no validation
-```
-
-## Logging
-
-### Pino Setup
-
-Use pino for structured JSON logging. Pretty-print in development only.
-
-```typescript
-// lib/log.ts
-import pino from 'pino';
-
-import { env } from '@/lib/config/env';
-
-export const logger = pino({
-	level: env.LOG_LEVEL,
-	...(env.NODE_ENV === 'development' && {
-		transport: { target: 'pino-pretty' },
-	}),
-});
-```
-
-### Usage
-
-Pino's API puts the data object first, message string second. All log messages lowercase.
-
-```typescript
-import { logger } from '@/lib/log';
-
-// Structured data first, message second
-const startup = { port: 3000 };
-logger.info(startup, 'server starting');
-
-const failedUser = {
-	err,
-	userId: '123',
-};
-logger.error(failedUser, 'failed to process user');
-
-// Message only (no structured data)
-logger.info('migration complete');
-
-// Child loggers for scoped context
-const childContext = {
-	module: 'ai',
-	script: 'process-document',
-};
-const log = logger.child(childContext);
-
-const generation = {
-	model: 'gpt-5',
-	tokens: 1523,
-};
-log.info(generation, 'generation complete');
-```
-
-```typescript
-// BAD: uppercase, string interpolation, console.log
-console.log(`Starting server on port ${port}`);
-logger.info(`User ${userId} created successfully`);
-
-// GOOD: lowercase, structured
-const serverContext = { port };
-logger.info(serverContext, 'server starting');
-
-const userContext = { userId };
-logger.info(userContext, 'user created');
-```
-
-## Database Patterns (Drizzle)
-
-### Schema Definition
-
-```typescript
-// lib/db/schema.ts
-import { pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
-
-export const users = pgTable('users', {
-	id: uuid('id').primaryKey().defaultRandom(),
-	name: text('name').notNull(),
-	email: text('email').notNull().unique(),
-	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-	updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-});
-
-// Infer types from schema — no separate type definitions
-export type User = typeof users.$inferSelect;
-export type NewUser = typeof users.$inferInsert;
-```
-
-### Connection Setup
-
-```typescript
-// lib/db/index.ts
-import { drizzle } from 'drizzle-orm/node-postgres';
-
-import { env } from '@/lib/config/env';
-import * as schema from '@/lib/db/schema';
-
-export const db = drizzle(env.DATABASE_URL, { schema });
-```
-
-### Query Patterns
-
-```typescript
-import { eq } from 'drizzle-orm';
-
-import { db } from '@/lib/db';
-import { users } from '@/lib/db/schema';
-
-// Select
-const user = await db.query.users.findFirst({
-	where: eq(users.id, userId),
-});
-
-// Insert
-const [newUser] = await db
-	.insert(users)
-	.values({
-		name: 'alice',
-		email: 'alice@example.com',
-	})
-	.returning();
-
-// Update
-await db.update(users).set({ name: 'updated' }).where(eq(users.id, userId));
-
-// Delete
-await db.delete(users).where(eq(users.id, userId));
-```
-
-### Transactions
-
-```typescript
-const result = await db.transaction(async tx => {
-	const [user] = await tx.insert(users).values(input).returning();
-	const settings = {
-		userId: user.id,
-		theme: 'light',
-	};
-	await tx.insert(userSettings).values(settings);
-
-	return user;
-});
-```
-
-## AI SDK Patterns
-
-### Provider Setup
-
-One provider, one file, one export. Provider option presets for common configurations.
-
-```typescript
-// lib/ai/provider.ts
-import { createOpenRouter } from '@openrouter/ai-sdk-provider';
-
-import { env } from '@/lib/config/env';
-
-export const openrouter = createOpenRouter({
-	apiKey: env.OPENROUTER_API_KEY,
-});
-
-// Provider option presets — OpenRouter-specific.
-// When switching providers, update this file.
-export const providerOptions = {
+const providerOptions = {
 	reasoningOff: {
 		openrouter: {
 			reasoning: {
 				enabled: false,
-				exclude: false,
 				effort: 'none',
 			},
 		},
 	},
-	reasoningLow: {
-		openrouter: {
-			reasoning: {
-				enabled: true,
-				exclude: true,
-				effort: 'low',
-			},
-		},
-	},
-	reasoningHigh: {
-		openrouter: {
-			reasoning: {
-				enabled: true,
-				exclude: true,
-				effort: 'high',
-			},
-		},
-	},
+} as const satisfies Record<string, ProviderOptions>;
+```
+
+Avoid non-null assertions. Narrow explicitly or throw a useful error.
+
+```typescript
+const user = await getUser(id);
+
+if (!user) {
+	throw new NotFoundError(`user ${id}`);
+}
+
+return user.email;
+```
+
+Use const objects with string literal values for enum-like values that are serialized, logged, or shared across boundaries.
+
+```typescript
+export const NodeEnv = {
+	DEVELOPMENT: 'development',
+	PRODUCTION: 'production',
+	TEST: 'test',
 } as const;
+
+export type NodeEnv = (typeof NodeEnv)[keyof typeof NodeEnv];
 ```
 
-Model selection happens at the call site. The provider gives you the model instance, not the other way around.
+## Zod and Validation
+
+Validate untrusted data with Zod or a structured parser. Keep schemas near the code that owns the data shape.
+
+Define the schema first, then infer the TypeScript type.
 
 ```typescript
-// GOOD: caller picks the model
-const structuredOptions = {
-	model: openrouter('google/gemini-3-flash-preview'),
-	system: loadPrompt('extract-entities'),
-	messages: [
-		{
-			role: 'user',
-			content: documentText,
-		},
-	],
-};
-const result = await structured(schema, structuredOptions);
+const createDocumentSchema = z.object({
+	title: z.string().min(1),
+	content: z.string().min(1),
+});
 
-// BAD: model constants baked into the template
-import { FAST_MODEL } from '@/lib/ai/models'; // don't do this
+type CreateDocumentInput = z.infer<typeof createDocumentSchema>;
 ```
 
-### Structured Output
-
-Use `generateText` with `Output.object()` for type-safe structured output. The `structured()` wrapper enforces this pattern and handles the null check.
+Use `parse` at boundaries where invalid data should throw and be handled by the boundary. Use `safeParse` when the local function can recover or return a typed error.
 
 ```typescript
-// lib/ai/structured.ts
-import { type LanguageModel, generateText, Output } from 'ai';
-import type { z } from 'zod';
-
-import { retry } from '@/lib/retry';
-
-type StructuredOptions = {
-	model: LanguageModel;
-	system?: string;
-	messages: Array<{
-		role: 'user' | 'assistant';
-		content: string;
-	}>;
-	providerOptions?: Record<string, unknown>;
-	retries?: number;
-};
-
-export async function structured<T extends z.ZodType>(schema: T, options: StructuredOptions): Promise<z.infer<T>> {
-	const { retries = 2, ...rest } = options;
-
-	return retry(
-		async () => {
-			const { output } = await generateText({
-				...rest,
-				output: Output.object({
-					schema,
-					name: schema.meta()?.title,
-					description: schema.meta()?.description,
-				}),
-			});
-
-			if (!output) {
-				throw new Error('model returned no structured output');
-			}
-
-			return output as z.infer<T>;
-		},
-		{ maxAttempts: retries + 1 }
-	);
-}
-```
-
-Usage at the call site:
-
-```typescript
-import { structured } from '@/lib/ai/structured';
-import { openrouter, providerOptions } from '@/lib/ai/provider';
-import { loadPrompt, schemaBlock } from '@/lib/ai/prompts';
-
-const promptVars = {
-	RESPONSE_SCHEMA: schemaBlock(extractedEntitySchema),
-};
-
-const structuredOptions = {
-	model: openrouter('google/gemini-3-flash-preview'),
-	system: loadPrompt('extract-entities', promptVars),
-	messages: [
-		{
-			role: 'user',
-			content: documentText,
-		},
-	],
-	providerOptions: providerOptions.reasoningOff,
-};
-
-const entities = await structured(extractedEntitySchema, structuredOptions);
-```
-
-### Streaming
-
-Use `streamText` for chat interfaces and streaming responses.
-
-```typescript
-// lib/ai/stream.ts
-import { type LanguageModel, streamText } from 'ai';
-
-type StreamOptions = {
-	model: LanguageModel;
-	system?: string;
-	messages: Array<{
-		role: 'user' | 'assistant';
-		content: string;
-	}>;
-	tools?: Record<string, unknown>;
-	providerOptions?: Record<string, unknown>;
-};
-
-export function stream(options: StreamOptions) {
-	return streamText(options);
-}
-```
-
-In a Next.js API route:
-
-```typescript
-// app/api/chat/route.ts
-import { streamText, isStepCount } from 'ai';
-
-import { openrouter } from '@/lib/ai/provider';
-import { loadPrompt } from '@/lib/ai/prompts';
-
 export async function POST(request: Request): Promise<Response> {
-	const { messages } = await request.json();
+	const body = await request.json();
+	const input = createDocumentSchema.parse(body);
 
-	const result = streamText({
-		model: openrouter('google/gemini-3-flash-preview'),
-		system: loadPrompt('chat'),
-		messages,
-		stopWhen: isStepCount(5),
-	});
+	const document = await createDocument(input);
 
-	return result.toUIMessageStreamResponse();
+	return Response.json(document, { status: 201 });
 }
 ```
 
-### Tool Definitions
-
-Define tools with `inputSchema` (not `parameters` — deprecated).
+For AI structured output, include metadata when it helps the model produce better fields.
 
 ```typescript
-import { tool } from 'ai';
+const summarySchema = z
+	.object({
+		title: z.string().meta({ description: 'a short title for the document' }),
+		keyPoints: z.array(z.string()).meta({ description: 'main points from the text' }),
+	})
+	.meta({
+		title: 'DocumentSummary',
+		description: 'a structured summary of a document',
+	});
+```
+
+## Errors
+
+Throw errors with useful context. Log at boundaries such as route handlers, server actions, CLI entrypoints, and background workers.
+
+Handle an error or propagate it; do not log and rethrow from internal helpers.
+
+```typescript
+// Good: internal helper adds context by throwing.
+async function requireDocument(id: string): Promise<Document> {
+	const document = await findDocument(id);
+
+	if (!document) {
+		throw new NotFoundError(`document ${id}`);
+	}
+
+	return document;
+}
+
+// Good: boundary logs once.
+export async function GET(): Promise<Response> {
+	try {
+		const documents = await listDocuments();
+
+		return Response.json(documents);
+	} catch (error) {
+		logger.error({ err: error }, 'list documents failed');
+
+		return Response.json({ error: 'internal error' }, { status: 500 });
+	}
+}
+```
+
+Error messages should be lowercase and have no trailing punctuation.
+
+### Programmer Errors vs Operational Errors
+
+TypeScript has `throw`, not panics, but the distinction still matters.
+
+Throw for programmer errors and violated invariants: impossible states, invalid options, missing required configuration, or a branch that should be unreachable. These should fail loudly because continuing would hide a bug.
+
+```typescript
+function assertPositiveInteger(value: number, name: string): void {
+	if (!Number.isInteger(value) || value < 1) {
+		throw new Error(`${name} must be a positive integer`);
+	}
+}
+```
+
+Operational errors are expected failures from the world: network errors, invalid user input, missing rows, rejected model calls. Add context and let the boundary decide how to report them.
+
+```typescript
+async function requireDocument(id: string): Promise<Document> {
+	const document = await findDocument(id);
+
+	if (!document) {
+		throw new NotFoundError(`document ${id}`);
+	}
+
+	return document;
+}
+```
+
+Use `process.exit` only at CLI process boundaries. Prefer `run().catch(...)` so cleanup and logging have one clear place.
+
+Use custom error classes for expected domain errors that callers need to branch on:
+
+```typescript
+type AppErrorOptions = {
+	cause?: unknown;
+};
+
+export class AppError extends Error {
+	readonly code: string;
+	readonly statusCode: number;
+
+	constructor(message: string, code: string, statusCode = 500, options?: AppErrorOptions) {
+		super(message, options);
+		this.name = this.constructor.name;
+		this.code = code;
+		this.statusCode = statusCode;
+	}
+}
+```
+
+## Async and Concurrency
+
+Use `Promise.all` for independent work that must all succeed.
+
+```typescript
+const [user, settings] = await Promise.all([getUser(userId), getSettings(userId)]);
+```
+
+Use `Promise.allSettled` when partial failure is expected and the caller can handle it.
+
+```typescript
+const summaryTasks = documents.map(document => summarize(document));
+const results = await Promise.allSettled(summaryTasks);
+```
+
+Use bounded concurrency for large batches or external services with rate limits. Prefer a sliding-window limiter such as `p-limit` over chunked batches.
+
+```typescript
+const limit = pLimit(10);
+const summaryTasks = documents.map(document => limit(() => summarize(document)));
+const summaries = await Promise.all(summaryTasks);
+```
+
+Accept `AbortSignal` for long-running operations that may be canceled. Check the signal before starting work and pass it to APIs that support cancellation.
+
+```typescript
+export async function retry<T>(operation: () => Promise<T>, options: RetryOptions = {}): Promise<T> {
+	options.signal?.throwIfAborted();
+
+	return operation();
+}
+```
+
+### Promise Formatting
+
+Prefer naming task arrays before awaiting them. This makes concurrency visible, gives the mapped work a name, and keeps `Promise.all` from becoming a nested expression. Inline `Promise.all(items.map(...))` is acceptable only for tiny local code where the mapping is a single obvious call.
+
+```typescript
+// Good: the concurrent work has a name.
+const userTasks = userIds.map(userId => getUser(userId));
+const users = await Promise.all(userTasks);
+
+// Good: named tasks are much easier to scan once behavior appears.
+const generationTasks = documents.map(document =>
+	limit(async () => {
+		const prompt = loadPrompt('summarize', {
+			TITLE: document.title,
+		});
+		const messages: ModelMessage[] = [
+			{
+				role: 'user',
+				content: document.content,
+			},
+		];
+
+		return structured(summarySchema, {
+			model,
+			system: prompt,
+			messages,
+		});
+	})
+);
+
+const summaries = await Promise.all(generationTasks);
+```
+
+Prefer `for...of` when tasks must run sequentially or when each step depends on the previous result. Do not use `Promise.all` just because it looks concise; use it because concurrency is correct.
+
+### Cleanup and Shutdown
+
+Use `try/finally` for resources that must close after async work. Ignore cleanup errors only when they are not actionable; otherwise log them at the boundary.
+
+```typescript
+const client = createClient();
+
+try {
+	await client.connect();
+	await runJob(client);
+} finally {
+	await client.close();
+}
+```
+
+CLI scripts should handle `SIGINT` and `SIGTERM` when they may run long enough to need cancellation. Thread an `AbortSignal` through the work instead of using global flags.
+
+## Environment and Configuration
+
+Centralize runtime configuration in `lib/config/env.ts`. Validate environment variables once and import typed config from there.
+
+```typescript
 import { z } from 'zod';
 
-export const searchDocuments = tool({
-	description: 'search the document database for relevant content',
-	inputSchema: z.object({
-		query: z.string().describe('the search query'),
-		limit: z.number().int().min(1).max(20).default(5).describe('max results'),
-	}),
-	execute: async ({ query, limit }) => {
-		const results = await db.query.documents.findMany({
-			where: ilike(documents.content, `%${query}%`),
-			limit,
-		});
+const envSchema = z.object({
+	NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+	DATABASE_URL: z.url(),
+	OPENROUTER_API_KEY: z.string().min(1),
+	LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
+});
 
-		return results.map(r => {
-			return {
-				id: r.id,
-				excerpt: r.content.slice(0, 200),
-			};
-		});
+export const env = envSchema.parse(process.env);
+```
+
+Config files that run outside Next.js, such as `drizzle.config.ts`, may read `process.env` directly when importing the full env module would require unrelated secrets.
+
+Use `SKIP_ENV_VALIDATION=true` only for build-time or CI paths that should not require runtime secrets.
+
+Server-only modules may read env vars, secrets, the filesystem, or database clients. Client components must not import them.
+
+## Logging
+
+Use Pino for structured logging. Put structured data first and the message second. Use child loggers when stable context applies to several lines.
+
+```typescript
+const log = logger.child({ script: 'ingest-documents' });
+
+log.info({ count: documents.length }, 'documents loaded');
+log.error(
+	{
+		err: error,
+		documentId,
 	},
-});
+	'document processing failed'
+);
 ```
 
-### Agents
+Use `console.log` only for intentional CLI output. Use the logger for diagnostics.
 
-Use `ToolLoopAgent` for multi-step AI agents.
+Log messages should be lowercase and stable. Put dynamic values in structured fields instead of interpolating them into the message.
 
 ```typescript
-import { ToolLoopAgent } from 'ai';
+// Good
+logger.info({ userId }, 'user created');
 
-import { openrouter } from '@/lib/ai/provider';
-import { searchDocuments } from '@/lib/tools/search-documents';
-import { createNote } from '@/lib/tools/create-note';
-
-export const researchAgent = new ToolLoopAgent({
-	model: openrouter('google/gemini-3.1-pro-preview'),
-	instructions: 'you are a research assistant. search documents and create notes.',
-	tools: {
-		searchDocuments,
-		createNote,
-	},
-});
+// Avoid
+logger.info(`user ${userId} created`);
 ```
 
-## Prompt Files
+Client-only error boundaries cannot use the server logger. Use `console.error` there for render diagnostics, and keep the message stable.
 
-### File Organization
+## Next.js
 
-Prompts live as standalone Markdown files in `prompts/` at the project root. One file per prompt, named by purpose.
+Server components are the default. Use client components only for browser APIs, event handlers, or hooks.
 
-```
-prompts/
-├── extract-entities.md
-├── classify-sentiment.md
-├── chat.md
-└── summarize.md
-```
-
-### Writing Prompts
-
-Prompts are Markdown. Use `{{DIRECTIVE}}` placeholders for dynamic content injected at load time. Include the response schema documentation in the prompt.
-
-```markdown
-# Extract Entities
-
-You are an entity extraction system. Extract all named entities from the
-provided text.
-
-## Response Format
-
-Return a JSON object matching this schema:
-
-{{RESPONSE_SCHEMA}}
-
-## Rules
-
-- Extract only entities explicitly mentioned in the text
-- Assign confidence based on how clearly the entity is identified
-- Use canonical names (e.g., "United States" not "US" or "America")
-```
-
-### Loading Prompts
-
-The prompt loader reads from `prompts/`, resolves `{{DIRECTIVE}}` placeholders, and validates that all directives are resolved and no unused variables are passed.
-
-````typescript
-// lib/ai/prompts.ts
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
-
-import { toJSONSchema } from 'zod/v4/core';
-import type { z } from 'zod';
-
-const PROMPTS_DIR = join(import.meta.dirname, '../../prompts');
-const DIRECTIVE_PATTERN = /\{\{([A-Z][A-Z0-9_]*)\}\}/g;
-
-export function loadPrompt(name: string, vars: Record<string, string> = {}): string {
-	const filePath = join(PROMPTS_DIR, `${name}.md`);
-	let content = readFileSync(filePath, 'utf-8');
-
-	const usedVars = new Set<string>();
-
-	content = content.replace(DIRECTIVE_PATTERN, (match, key: string) => {
-		if (!(key in vars)) {
-			throw new Error(`unresolved directive {{${key}}} in prompt "${name}"`);
-		}
-
-		usedVars.add(key);
-
-		return vars[key];
-	});
-
-	const unusedVars = Object.keys(vars).filter(k => !usedVars.has(k));
-
-	if (unusedVars.length > 0) {
-		throw new Error(`unused vars passed to prompt "${name}": ${unusedVars.join(', ')}`);
-	}
-
-	return content;
-}
-
-export function schemaBlock(schema: z.ZodType): string {
-	return ['```json', JSON.stringify(toJSONSchema(schema), null, 2), '```'].join('\n');
-}
-````
-
-Usage:
+Push `'use client'` as far down the component tree as practical.
 
 ```typescript
-const systemPrompt = loadPrompt('extract-entities', {
-	RESPONSE_SCHEMA: schemaBlock(extractedEntitySchema),
-});
-```
-
-The bidirectional validation (unresolved directives AND unused variables) catches bugs in both directions — a renamed placeholder in the prompt file is caught immediately, and a stale variable in the code is caught too.
-
-## CLI Script Patterns
-
-### Script Structure
-
-Scripts live in `scripts/` and run with `tsx`. Every script follows the same pattern: parse args, run main logic, handle fatal errors.
-
-```typescript
-// scripts/process-document.ts
-import { parseArgs } from 'node:util';
-
-import { logger } from '@/lib/log';
-import { structured } from '@/lib/ai/structured';
-import { openrouter } from '@/lib/ai/provider';
-import { loadPrompt, schemaBlock } from '@/lib/ai/prompts';
-
-const parseArgsOptions = {
-	options: {
-		input: {
-			type: 'string',
-			short: 'i',
-		},
-		model: {
-			type: 'string',
-			short: 'm',
-			default: 'google/gemini-3-flash-preview',
-		},
-		verbose: {
-			type: 'boolean',
-			short: 'v',
-			default: false,
-		},
-	},
-	strict: true,
-};
-
-const { values } = parseArgs(parseArgsOptions);
-
-async function main() {
-	if (!values.input) {
-		throw new Error('--input is required');
-	}
-
-	const childContext = { script: 'process-document' };
-	const log = logger.child(childContext);
-
-	const startContext = {
-		input: values.input,
-		model: values.model,
-	};
-	log.info(startContext, 'starting');
-
-	// ... main logic using lib/ imports ...
-
-	log.info('done');
-}
-
-main().catch(err => {
-	const context = { err };
-	logger.error(context, 'script failed');
-	process.exit(1);
-});
-```
-
-### Running Scripts
-
-```bash
-pnpm tsx scripts/process-document.ts --input ./data/doc.pdf
-pnpm tsx scripts/process-document.ts -i ./data/doc.pdf -m openai/gpt-5
-```
-
-### Key Rules
-
-- Use `node:util` `parseArgs` for argument parsing. It's built into Node.js — no dependency needed.
-- Import from `@/lib/` via path aliases. Scripts share the same libraries as the Next.js app.
-- Use `logger.child()` for scoped logging within scripts.
-- Fatal errors go to `process.exit(1)` in the top-level `.catch()`.
-- Never put business logic in the script file. Import it from `lib/`.
-
-## Next.js Patterns
-
-### Server Components (Default)
-
-Components are server components by default. They can be async, fetch data directly, and access server-only resources.
-
-```typescript
-// app/documents/page.tsx — this is a server component
-import { db } from '@/lib/db'
-import { documents } from '@/lib/db/schema'
-
+// Server component by default.
 export default async function DocumentsPage() {
-	const docs = await db.query.documents.findMany({
-		orderBy: (documents, { desc }) => [desc(documents.createdAt)],
-	})
+	const documents = await listDocuments();
 
-	return (
-		<main>
-			<h1>documents</h1>
-			{docs.map((doc) => (
-				<article key={doc.id}>{doc.title}</article>
-			))}
-		</main>
-	)
+	return <DocumentList documents={documents} />;
 }
 ```
 
-### Client Components
-
-Add `'use client'` only when you need browser APIs, event handlers, or React hooks (useState, useEffect, etc.).
+Route handlers should validate input, call library code, and translate known errors into HTTP responses. Keep business logic in `lib/`.
 
 ```typescript
-// components/search-input.tsx
-'use client'
-
-import { useState } from 'react'
-
-export function SearchInput({ onSearch }: { onSearch: (query: string) => void }) {
-	const [query, setQuery] = useState('')
-
-	return (
-		<input
-			value={query}
-			onChange={(e) => setQuery(e.target.value)}
-			onKeyDown={(e) => e.key === 'Enter' && onSearch(query)}
-		/>
-	)
-}
-```
-
-**Push `'use client'` as far down as possible.** Keep pages and layouts as server components. Only mark the specific interactive component as client.
-
-### API Routes
-
-```typescript
-// app/api/documents/route.ts
-import { db } from '@/lib/db';
-import { documents } from '@/lib/db/schema';
-import { logger } from '@/lib/log';
-import { NotFoundError } from '@/lib/errors';
-
 export async function GET(): Promise<Response> {
-	const docs = await db.query.documents.findMany();
+	try {
+		const documents = await listDocuments();
 
-	return Response.json(docs);
+		return Response.json(documents);
+	} catch (error) {
+		logger.error({ err: error }, 'list documents failed');
+
+		return Response.json({ error: 'internal error' }, { status: 500 });
+	}
 }
+```
 
+Small responses can be inline:
+
+```typescript
+return Response.json({ status: 'ok' });
+```
+
+Name response bodies only when the name improves readability or the value is reused.
+
+### Route Handlers
+
+Route handlers are transport boundaries. They should be thin: parse input, call library code, translate known failures, and log unexpected failures.
+
+```typescript
 export async function POST(request: Request): Promise<Response> {
 	try {
 		const body = await request.json();
 		const input = createDocumentSchema.parse(body);
 
-		const [doc] = await db.insert(documents).values(input).returning();
+		const document = await createDocument(input);
 
-		const responseOptions = { status: 201 };
-		return Response.json(doc, responseOptions);
+		return Response.json(document, { status: 201 });
 	} catch (error) {
 		if (error instanceof z.ZodError) {
-			const errorBody = {
-				error: 'validation failed',
-				details: error.flatten(),
-			};
-			const responseOptions = { status: 400 };
-			return Response.json(errorBody, responseOptions);
+			return Response.json(
+				{
+					error: 'invalid request',
+					details: error.flatten(),
+				},
+				{ status: 400 }
+			);
 		}
 
-		const context = { err: error };
-		logger.error(context, 'create document failed');
+		logger.error({ err: error }, 'create document failed');
 
-		const errorBody = { error: 'internal error' };
-		const responseOptions = { status: 500 };
-		return Response.json(errorBody, responseOptions);
+		return Response.json({ error: 'internal error' }, { status: 500 });
 	}
 }
 ```
 
-### Error Boundaries
+Avoid hiding simple route behavior behind a generic handler factory. Extract only when multiple routes share real behavior, not just the same shape.
+
+### Data Boundaries
+
+Keep database clients, filesystem access, provider secrets, and prompt loading on the server side. Pass plain serializable data into client components.
 
 ```typescript
-// app/error.tsx
-'use client'
+export default async function DocumentsPage() {
+	const documents = await listDocuments();
 
-export default function ErrorPage({
-	error,
-	reset,
-}: {
-	error: Error & { digest?: string }
-	reset: () => void
-}) {
+	return <DocumentsView documents={documents} />;
+}
+```
+
+If a client component needs to trigger server work, use a route handler or server action deliberately. Do not import server-only helpers into a client component because it happens to typecheck.
+
+## React Components
+
+Keep components small and data flow explicit. Co-locate component-specific helpers with the component.
+
+Extract a shared component only when it has a real second caller or the extraction makes the current file easier to understand.
+
+Prefer server components for data fetching. Use client components for interaction.
+
+```typescript
+'use client';
+
+import { useState } from 'react';
+
+export function SearchInput({ onSearch }: { onSearch: (query: string) => void }) {
+	const [query, setQuery] = useState('');
+
 	return (
-		<div>
-			<h2>something went wrong</h2>
-			<button onClick={reset}>try again</button>
-		</div>
-	)
+		<input
+			value={query}
+			onChange={event => setQuery(event.target.value)}
+			onKeyDown={event => {
+				if (event.key === 'Enter') {
+					onSearch(query);
+				}
+			}}
+		/>
+	);
 }
 ```
 
-## Newline Spacing
+Use descriptive prop types near the component. If props are only used by one component, keep the type next to that component.
 
-Use blank lines to separate logical groups within a function body. A `return` statement should have a preceding blank line. Closely related statements (a variable and the loop that immediately uses it) stay together.
+## Database
+
+Keep Drizzle schema definitions in `lib/db/schema.ts`. Infer row and insert types from the schema.
 
 ```typescript
-// GOOD: grouped by intent, return has breathing room
-async function processItems(items: Item[]): Promise<number> {
-	const validated = items.filter(item => item.isValid);
+export const documents = pgTable('documents', {
+	id: uuid('id').primaryKey().defaultRandom(),
+	title: text('title').notNull(),
+	content: text('content').notNull(),
+	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
 
-	const results = await Promise.all(validated.map(item => transform(item)));
+export type Document = typeof documents.$inferSelect;
+export type NewDocument = typeof documents.$inferInsert;
+```
 
-	const total = results.reduce((sum, r) => sum + r.value, 0);
+Use `lib/db/client.ts` for the database client. Import it directly from call sites that need database access.
 
-	if (total === 0) {
-		throw new ValidationError('no valid items to process');
+```typescript
+import { db } from '@/lib/db/client';
+import { documents } from '@/lib/db/schema';
+```
+
+Generate migrations for schema changes. Use `db:push` only for local development when migrations are intentionally skipped.
+
+Do not hide Drizzle queries behind generic repository abstractions unless there is real domain behavior to encapsulate. A small project can query directly from route handlers or focused library functions.
+
+## AI SDK and Prompts
+
+Keep provider setup in `lib/ai/provider.ts`. Choose models at call sites unless a real product-level default exists.
+
+```typescript
+const result = await structured(summarySchema, {
+	model: openrouter(modelId),
+	system,
+	messages,
+	providerOptions: providerOptions.reasoningOff,
+});
+```
+
+Use Zod schemas for structured output. Keep schema descriptions concise and useful to the model.
+
+Keep prompt templates in `prompts/`. Use explicit placeholders for dynamic content and fail fast when a prompt has unresolved placeholders or unused variables.
+
+```typescript
+const system = loadPrompt('summarize-document', {
+	RESPONSE_SCHEMA: schemaBlock(summarySchema),
+});
+```
+
+Do not put business logic in prompts. Prompts should express model instructions; application code should validate, persist, retry, and decide what happens next.
+
+Keep AI wrappers thin. A wrapper is useful when it centralizes validation, retries, logging, or provider-specific defaults. A wrapper that only renames an SDK function adds indirection without buying much.
+
+```typescript
+// Good: wrapper adds schema typing, retry behavior, and the null-output guard.
+const summary = await structured(summarySchema, {
+	model: openrouter(modelId),
+	system,
+	messages,
+});
+
+// Avoid: wrapper only hides the SDK call and invents a second API.
+const summary = await aiService.generateStructuredSummary(document);
+```
+
+Prompts are not configuration stores. Keep model IDs, retry counts, persistence decisions, and branching logic in TypeScript where they can be typed and tested.
+
+## CLI Scripts
+
+Scripts in `scripts/` should parse arguments, wire library functions together, log at the boundary, and exit with a clear status.
+
+```typescript
+import { parseArgs } from 'node:util';
+
+import { logger } from '@/lib/log';
+
+const parseOptions = {
+	options: {
+		input: {
+			type: 'string',
+			short: 'i',
+		},
+	},
+	strict: true,
+} as const;
+
+async function run(): Promise<void> {
+	const { values } = parseArgs(parseOptions);
+
+	if (!values.input) {
+		throw new Error('--input is required');
 	}
 
-	return total;
+	logger.info({ input: values.input }, 'starting');
 }
 
-// BAD: everything jammed together
-async function processItems(items: Item[]): Promise<number> {
-	const validated = items.filter(item => item.isValid);
-	const results = await Promise.all(validated.map(item => transform(item)));
-	const total = results.reduce((sum, r) => sum + r.value, 0);
-	if (total === 0) {
-		throw new ValidationError('no valid items to process');
-	}
-	return total;
-}
+run().catch((error: unknown) => {
+	logger.error({ err: error }, 'script failed');
+	process.exit(1);
+});
 ```
 
-## Development Workflow
+Use `console.log` for the script's intended output. Use `logger` for progress and diagnostics.
 
-### Type Checking
+## Code Organization
 
-```bash
-pnpm typecheck  # tsc --noEmit — catches type errors without building
+Use `app/` for Next.js routes and UI entrypoints. Use `lib/` for shared implementation. Use `scripts/` for CLI entrypoints that wire together library code.
+
+```text
+project/
+├── app/
+│   ├── api/
+│   ├── layout.tsx
+│   └── page.tsx
+├── lib/
+│   ├── ai/
+│   ├── config/
+│   ├── db/
+│   ├── errors.ts
+│   ├── log.ts
+│   └── retry.ts
+├── prompts/
+└── scripts/
 ```
 
-Use during development, pre-commit hooks, and CI. Faster than a full build for quick validation.
+Keep files focused. Avoid `utils`, `helpers`, and broad catch-all modules.
 
-### Dependency Management
+Prefer direct, manual wiring over hidden registries or global service containers.
 
-```bash
-pnpm add package-name           # add runtime dependency
-pnpm add -D package-name        # add dev dependency
-pnpm update --latest            # update all (only when explicitly asked)
+### Common Agent Anti-Patterns
+
+Avoid these habits. They usually make TypeScript code look busy without making it safer.
+
+- Creating a class for one function and no state.
+- Extracting a helper after one use just to make a file look organized.
+- Naming every small inline object even when the name adds no meaning.
+- Building `utils.ts`, `helpers.ts`, or `types.ts` dumping grounds.
+- Wrapping SDKs so thoroughly that the underlying library docs no longer help.
+- Using `reduce` or nested array chains where a loop would read top to bottom.
+- Adding fallback behavior for impossible states instead of enforcing the invariant.
+- Preserving compatibility with code that only exists on the current branch.
+
+## Tests
+
+Test behavior, not implementation shape. Add focused tests for shared helpers, validation logic, error paths, and anything that protects a public contract.
+
+```typescript
+it('rejects invalid concurrency before running tasks', async () => {
+	const mapper = vi.fn().mockResolvedValue(1);
+
+	await expect(mapConcurrent([1], mapper, { concurrency: 0 })).rejects.toThrow(
+		'concurrency must be a positive integer'
+	);
+	expect(mapper).not.toHaveBeenCalled();
+});
 ```
 
-### Linting and Formatting
+Prefer small fixtures inside tests. Avoid new example files or broad snapshots unless they are the clearest way to protect behavior.
 
-```bash
-pnpm lint         # eslint
-pnpm format       # prettier --write
+Use fake timers or injected dependencies when testing time, retries, or randomness would otherwise make tests slow or flaky.
+
+## Dependency Management
+
+Use `pnpm add package-name` for runtime dependencies and `pnpm add -D package-name` for dev dependencies.
+
+Before adding a dependency, check whether the platform or existing stack already provides the feature. Prefer small, well-maintained packages for focused problems.
+
+Keep dependency updates intentional. Do not run broad upgrades unless explicitly asked.
+
+## Comments
+
+Comment non-obvious intent, invariants, operational behavior, or surprising tradeoffs. Do not narrate code that already reads clearly.
+
+```typescript
+// cache prompts outside development so request handlers don't hit the disk on every call.
+const shouldCache = env.NODE_ENV !== NodeEnv.DEVELOPMENT;
 ```
 
-### Database Migrations
+Avoid section-banner comments. Use files and functions for structure.
 
-```bash
-pnpm db:generate  # generate migration from schema changes
-pnpm db:migrate   # apply pending migrations
-pnpm db:push      # push schema directly (dev only)
-pnpm db:studio    # open drizzle studio GUI
-```
+## Generated and Local Files
 
-### Running Scripts
+Keep generated build output out of Git and Docker contexts. Keep project-specific agent assets, such as `.agents/`, in the project when they are part of the development workflow, but exclude them from Docker images unless runtime code needs them.
 
-```bash
-pnpm tsx scripts/example.ts           # run a script
-pnpm tsx scripts/example.ts --help    # if the script supports it
-```
-
-### Key ESLint Rules
-
-These rules enforce this style guide:
-
-- `@typescript-eslint/no-explicit-any` — prevents `any` usage
-- `@typescript-eslint/consistent-type-imports` — enforces `import type`
-- `@typescript-eslint/no-unused-vars` — catches dead code
-- `@typescript-eslint/prefer-nullish-coalescing` — enforces `??` over `||`
-- `@typescript-eslint/no-floating-promises` — catches unhandled async errors
+Agent skill/reference assets are project inputs, but they may include vendor Markdown or lock files. It is fine to exclude those from project-wide formatting when formatting churn would obscure useful changes.

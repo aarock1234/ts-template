@@ -11,9 +11,9 @@ export type RetryOptions = {
 	shouldRetry?: ShouldRetry;
 };
 
-// retries fn with exponential backoff and full jitter.
+// retries operation with exponential backoff and full jitter.
 // shouldRetry controls which errors trigger another attempt — defaults to always retry.
-export async function retry<T>(fn: () => Promise<T>, options: RetryOptions = {}): Promise<T> {
+export async function retry<T>(operation: () => Promise<T>, options: RetryOptions = {}): Promise<T> {
 	const maxAttempts = options.maxAttempts ?? 3;
 	const baseDelay = options.baseDelay ?? 1000;
 	const maxDelay = options.maxDelay ?? 10_000;
@@ -21,16 +21,19 @@ export async function retry<T>(fn: () => Promise<T>, options: RetryOptions = {})
 	const signal = options.signal;
 	const shouldRetry = options.shouldRetry ?? alwaysRetry;
 
-	signal?.throwIfAborted();
+	validateRetryOptions({
+		maxAttempts,
+		baseDelay,
+		maxDelay,
+		multiplier,
+	});
 
-	let lastError: unknown;
+	signal?.throwIfAborted();
 
 	for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
 		try {
-			return await fn();
+			return await operation();
 		} catch (error) {
-			lastError = error;
-
 			const isLastAttempt = attempt + 1 >= maxAttempts;
 
 			if (isLastAttempt || !shouldRetry(error, attempt)) {
@@ -40,14 +43,33 @@ export async function retry<T>(fn: () => Promise<T>, options: RetryOptions = {})
 
 		const ceiling = Math.min(baseDelay * multiplier ** attempt, maxDelay);
 		const delay = Math.random() * ceiling;
-		const timerOptions = { signal };
 
-		await setTimeout(delay, undefined, timerOptions);
+		await setTimeout(delay, undefined, { signal });
 	}
 
-	throw lastError;
+	throw new Error('retry loop exited unexpectedly');
 }
 
 function alwaysRetry(): boolean {
 	return true;
+}
+
+function validateRetryOptions(
+	options: Required<Pick<RetryOptions, 'maxAttempts' | 'baseDelay' | 'maxDelay' | 'multiplier'>>
+): void {
+	if (!Number.isInteger(options.maxAttempts) || options.maxAttempts < 1) {
+		throw new Error('maxAttempts must be a positive integer');
+	}
+
+	if (!Number.isFinite(options.baseDelay) || options.baseDelay < 0) {
+		throw new Error('baseDelay must be a non-negative finite number');
+	}
+
+	if (!Number.isFinite(options.maxDelay) || options.maxDelay < 0) {
+		throw new Error('maxDelay must be a non-negative finite number');
+	}
+
+	if (!Number.isFinite(options.multiplier) || options.multiplier < 1) {
+		throw new Error('multiplier must be a finite number greater than or equal to 1');
+	}
 }

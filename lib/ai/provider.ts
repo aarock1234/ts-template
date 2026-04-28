@@ -1,6 +1,10 @@
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
+import type { ProviderOptions } from '@ai-sdk/provider-utils';
 
 import { env } from '@/lib/config/env';
+import { assertServerOnly } from '@/lib/server-only';
+
+assertServerOnly('lib/ai/provider');
 
 export const openrouter = createOpenRouter({
 	apiKey: env.OPENROUTER_API_KEY,
@@ -34,4 +38,4 @@ export const providerOptions = {
 			},
 		},
 	},
-} as const;
+} as const satisfies Record<string, ProviderOptions>;

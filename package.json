@@ -4,7 +4,7 @@
 	"private": true,
 	"type": "module",
 	"engines": {
-		"node": ">=22"
+		"node": ">=24"
 	},
 	"packageManager": "pnpm@10.33.0",
 	"scripts": {
@@ -17,7 +17,7 @@
 		"format:check": "prettier --check .",
 		"test": "vitest run --passWithNoTests",
 		"test:watch": "vitest --passWithNoTests",
-		"check": "concurrently \"pnpm typecheck\" \"pnpm lint\" \"pnpm format:check\"",
+		"check": "concurrently \"pnpm typecheck\" \"pnpm lint\" \"pnpm format:check\" \"pnpm test\"",
 		"clean": "rm -rf .next coverage *.tsbuildinfo",
 		"script": "tsx --env-file-if-exists=.env",
 		"typecheck": "next typegen && tsc --noEmit",

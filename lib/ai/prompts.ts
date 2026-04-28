@@ -5,6 +5,9 @@ import type { z } from 'zod';
 import { toJSONSchema } from 'zod/v4/core';
 
 import { env, NodeEnv } from '@/lib/config/env';
+import { assertServerOnly } from '@/lib/server-only';
+
+assertServerOnly('lib/ai/prompts');
 
 const PROMPTS_DIR = join(import.meta.dirname, '../../prompts');
 const DIRECTIVE_PATTERN = /\{\{([A-Z][A-Z0-9_]*)\}\}/g;

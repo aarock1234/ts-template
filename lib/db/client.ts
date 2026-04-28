@@ -3,6 +3,9 @@ import postgres from 'postgres';
 
 import { env, NodeEnv } from '@/lib/config/env';
 import * as schema from '@/lib/db/schema';
+import { assertServerOnly } from '@/lib/server-only';
+
+assertServerOnly('lib/db/client');
 
 // reuse a single postgres client across Next.js HMR reloads in development.
 // without this, every file save creates a new client and leaks connections

@@ -2,7 +2,6 @@ import { pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 const timestampOptions = { withTimezone: true };
 
-// Example table — replace with your own schema.
 export const documents = pgTable('documents', {
 	id: uuid('id').primaryKey().defaultRandom(),
 	title: text('title').notNull(),

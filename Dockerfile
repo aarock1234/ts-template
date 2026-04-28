@@ -27,7 +27,6 @@ ENV HOSTNAME=0.0.0.0
 # the node:alpine image ships with a non-root `node` user — use it.
 COPY --from=builder --chown=node:node /app/.next/standalone ./
 COPY --from=builder --chown=node:node /app/.next/static ./.next/static
-COPY --from=builder --chown=node:node /app/public ./public
 COPY --from=builder --chown=node:node /app/prompts ./prompts
 
 USER node

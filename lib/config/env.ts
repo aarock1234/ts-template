@@ -1,5 +1,9 @@
 import { z } from 'zod';
 
+import { assertServerOnly } from '@/lib/server-only';
+
+assertServerOnly('lib/config/env');
+
 export const NodeEnv = {
 	DEVELOPMENT: 'development',
 	PRODUCTION: 'production',
@@ -27,6 +31,11 @@ const envSchema = z.object({
 	LOG_LEVEL: z.enum(logLevelValues).default(LogLevel.INFO),
 });
 
+const skippedEnvSchema = envSchema.pick({
+	NODE_ENV: true,
+	LOG_LEVEL: true,
+});
+
 export type Env = z.infer<typeof envSchema>;
 
 // parses and validates environment variables at module load.
@@ -34,13 +43,19 @@ export type Env = z.infer<typeof envSchema>;
 // set SKIP_ENV_VALIDATION=true to bypass in CI (e.g. `next build` without runtime secrets).
 function parseEnv(): Env {
 	if (process.env.SKIP_ENV_VALIDATION === 'true') {
+		const result = skippedEnvSchema.safeParse(process.env);
+
+		if (!result.success) {
+			throw result.error;
+		}
+
 		// still apply defaults so non-secret consumers (pino, etc.) don't crash;
-		// required fields fall through as empty strings — runtime consumers will fail loudly if used.
+		// required fields fall through as empty strings; runtime consumers will fail loudly if used.
 		return {
-			NODE_ENV: (process.env.NODE_ENV as NodeEnv | undefined) ?? NodeEnv.DEVELOPMENT,
+			NODE_ENV: result.data.NODE_ENV,
 			DATABASE_URL: process.env.DATABASE_URL ?? '',
 			OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY ?? '',
-			LOG_LEVEL: (process.env.LOG_LEVEL as LogLevel | undefined) ?? LogLevel.INFO,
+			LOG_LEVEL: result.data.LOG_LEVEL,
 		};
 	}
 
@@ -56,7 +71,7 @@ function parseEnv(): Env {
 		return ` - ${path}: ${issue.message}`;
 	});
 
-	const message = ['invalid environment variables — check your .env file:', ...issues].join('\n');
+	const message = ['invalid environment variables - check your .env file:', ...issues].join('\n');
 
 	throw new Error(message);
 }

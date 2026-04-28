@@ -1,6 +1,3 @@
-// Example CLI script demonstrating the standard pattern.
-// Run with: pnpm tsx scripts/example.ts --input "your text here"
-
 import { parseArgs } from 'node:util';
 
 import type { ModelMessage } from 'ai';
@@ -53,18 +50,20 @@ async function run(signal: AbortSignal): Promise<void> {
 		throw new Error('--input is required');
 	}
 
-	const childContext = { script: 'example' };
-	const log = logger.child(childContext);
+	const log = logger.child({ script: 'example' });
 	const modelId = values.model ?? DEFAULT_MODEL;
 
-	const startContext = {
-		input: values.input,
-		model: modelId,
-	};
-	log.info(startContext, 'starting');
+	log.info(
+		{
+			input: values.input,
+			model: modelId,
+		},
+		'starting'
+	);
 
-	const promptVars = { RESPONSE_SCHEMA: schemaBlock(summarySchema) };
-	const system = loadPrompt('example', promptVars);
+	const system = loadPrompt('example', {
+		RESPONSE_SCHEMA: schemaBlock(summarySchema),
+	});
 	const messages: ModelMessage[] = [
 		{
 			role: 'user',
@@ -80,9 +79,8 @@ async function run(signal: AbortSignal): Promise<void> {
 	};
 
 	const result = await structured(summarySchema, structuredOptions);
-	const resultContext = { result };
 
-	log.info(resultContext, 'done');
+	log.info({ result }, 'done');
 	console.log(JSON.stringify(result, null, 2));
 }
 
@@ -92,7 +90,6 @@ process.on('SIGINT', () => controller.abort());
 process.on('SIGTERM', () => controller.abort());
 
 run(controller.signal).catch((error: unknown) => {
-	const context = { err: error };
-	logger.error(context, 'script failed');
+	logger.error({ err: error }, 'script failed');
 	process.exit(1);
 });

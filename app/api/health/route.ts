@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm';
 
-import { db } from '@/lib/db';
+import { db } from '@/lib/db/client';
 import { logger } from '@/lib/log';
 
 export const dynamic = 'force-dynamic';
@@ -11,16 +11,10 @@ export async function GET(): Promise<Response> {
 	try {
 		await db.execute(heartbeatQuery);
 
-		const body = { status: 'ok' };
-
-		return Response.json(body);
+		return Response.json({ status: 'ok' });
 	} catch (error) {
-		const context = { err: error };
-		logger.error(context, 'health check failed');
+		logger.error({ err: error }, 'health check failed');
 
-		const body = { status: 'error' };
-		const responseOptions = { status: 503 };
-
-		return Response.json(body, responseOptions);
+		return Response.json({ status: 'error' }, { status: 503 });
 	}
 }
