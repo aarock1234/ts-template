@@ -32,16 +32,16 @@ ts-template/
 
 ## Development
 
-| Command          | Description                 |
-| ---------------- | --------------------------- |
-| `pnpm dev`       | Start Next.js dev server    |
-| `pnpm build`     | Production build            |
-| `pnpm lint`      | Lint with ESLint            |
-| `pnpm lint:fix`  | Lint and apply fixes        |
-| `pnpm format`    | Format with Prettier        |
-| `pnpm test`      | Run Vitest                  |
-| `pnpm typecheck` | Type check without building |
-| `pnpm check`     | Typecheck, lint, format     |
+| Command          | Description                         |
+| ---------------- | ----------------------------------- |
+| `pnpm dev`       | Start Next.js dev server            |
+| `pnpm build`     | Production build                    |
+| `pnpm lint`      | Lint with ESLint                    |
+| `pnpm lint:fix`  | Lint and apply fixes                |
+| `pnpm format`    | Format with Prettier                |
+| `pnpm test`      | Run Vitest                          |
+| `pnpm typecheck` | Type check without building         |
+| `pnpm check`     | Typecheck, lint, format check, test |
 
 ### Database
 

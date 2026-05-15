@@ -6,10 +6,8 @@ import { logger } from '@/lib/log';
 export const dynamic = 'force-dynamic';
 
 export async function GET(): Promise<Response> {
-	const heartbeatQuery = sql`SELECT 1`;
-
 	try {
-		await db.execute(heartbeatQuery);
+		await db.execute(sql`SELECT 1`);
 
 		return Response.json({ status: 'ok' });
 	} catch (error) {

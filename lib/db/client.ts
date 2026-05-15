@@ -22,9 +22,7 @@ if (env.NODE_ENV !== NodeEnv.PRODUCTION) {
 	globalForDb.__postgresClient__ = client;
 }
 
-const drizzleOptions = { schema };
-
-export const db = drizzle(client, drizzleOptions);
+export const db = drizzle(client, { schema });
 
 // closes the underlying postgres client. call this from CLI scripts before exit.
 export async function closeDb(): Promise<void> {

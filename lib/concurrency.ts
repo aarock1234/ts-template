@@ -15,17 +15,14 @@ export async function mapConcurrent<T, R>(
 	options: ConcurrencyOptions = {}
 ): Promise<R[]> {
 	const limit = makeLimit(options);
-	const tasks: Promise<R>[] = [];
 
-	for (const item of items) {
-		const task = limit(() => {
+	const tasks = items.map(item =>
+		limit(() => {
 			options.signal?.throwIfAborted();
 
 			return mapper(item);
-		});
-
-		tasks.push(task);
-	}
+		})
+	);
 
 	return Promise.all(tasks);
 }
@@ -38,10 +35,9 @@ export async function mapConcurrentSettled<T, R>(
 	options: ConcurrencyOptions = {}
 ): Promise<PromiseSettledResult<R>[]> {
 	const limit = makeLimit(options);
-	const tasks: Promise<PromiseSettledResult<R>>[] = [];
 
-	for (const item of items) {
-		const task = limit(async (): Promise<PromiseSettledResult<R>> => {
+	const tasks = items.map(item =>
+		limit(async (): Promise<PromiseSettledResult<R>> => {
 			options.signal?.throwIfAborted();
 
 			try {
@@ -57,10 +53,8 @@ export async function mapConcurrentSettled<T, R>(
 					reason,
 				};
 			}
-		});
-
-		tasks.push(task);
-	}
+		})
+	);
 
 	return Promise.all(tasks);
 }

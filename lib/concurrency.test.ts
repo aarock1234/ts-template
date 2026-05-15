@@ -36,6 +36,50 @@ describe('mapConcurrent', () => {
 		);
 		expect(mapper).not.toHaveBeenCalled();
 	});
+
+	it('does not run mappers when the signal is already aborted', async () => {
+		const controller = new AbortController();
+		controller.abort();
+		const mapper = vi.fn().mockResolvedValue(1);
+
+		await expect(mapConcurrent([1, 2, 3], mapper, { signal: controller.signal })).rejects.toThrow();
+		expect(mapper).not.toHaveBeenCalled();
+	});
+
+	it('stops running mappers after the signal aborts mid-batch', async () => {
+		const controller = new AbortController();
+		const mapper = vi.fn(async (item: number) => {
+			await Promise.resolve();
+
+			if (item === 1) {
+				controller.abort();
+			}
+
+			return item;
+		});
+
+		await expect(
+			mapConcurrent([1, 2, 3], mapper, {
+				concurrency: 1,
+				signal: controller.signal,
+			})
+		).rejects.toThrow();
+		expect(mapper).toHaveBeenCalledTimes(1);
+	});
+
+	it('rejects the batch when any mapper rejects', async () => {
+		const mapper = vi.fn(async (item: number) => {
+			await Promise.resolve();
+
+			if (item === 2) {
+				throw new Error('failed item');
+			}
+
+			return item * 2;
+		});
+
+		await expect(mapConcurrent([1, 2, 3], mapper, { concurrency: 1 })).rejects.toThrow('failed item');
+	});
 });
 
 describe('mapConcurrentSettled', () => {
